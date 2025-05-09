@@ -4,7 +4,7 @@ This library provides a unified way to extract metadata from machine learning mo
 ## Usage
 Install necessary dependencies:
 ```
-pip install pandas scikit-learn torch tensorflow request pyjwt
+pip install pandas scikit-learn torch tensorflow requests pyjwt
 ```
 Deploy the Passport server before running the API client. 
 Clone passport server repository:
@@ -21,8 +21,9 @@ After completing your machine learning work, provide the trained model object to
 # Construct an api client(you can choose one of them: KerasMetadaCollectionAPI, TorchMetadataCollectionAPI or SKLearnMetadataCollectionAPI) for interacting with AI4HF passport server
 api_client = KerasMetadataCollectionAPI(
         passport_server_url="http://localhost:80/ai4hf/passport/api",
-        study_id="1",
-        organization_id="1",
+        study_id="initial_study",
+        experiment_id="initial_experiment",
+        organization_id="initial_organization",
         username="data_scientist",
         password="data_scientist"
     )

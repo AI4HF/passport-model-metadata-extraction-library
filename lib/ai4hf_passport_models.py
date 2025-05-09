@@ -93,6 +93,7 @@ class Model:
                  modelId: str = None, 
                  learningProcessId: str = None, 
                  studyId: str = None,
+                 experimentId: str = None,
                  name: str = None,
                  owner: str = None,
                  modelType: str = None):
@@ -102,6 +103,7 @@ class Model:
         self.modelId = modelId
         self.learningProcessId = learningProcessId
         self.studyId = studyId
+        self.experimentId = experimentId
         self.name = name
         self.version = version
         self.tag = tag
@@ -123,7 +125,8 @@ class Model:
     def __str__(self):
         return json.dumps({"modelId": self.modelId, 
                            "learningProcessId": self.learningProcessId, 
-                           "studyId": self.studyId, 
+                           "studyId": self.studyId,
+                           "experimentId": self.experimentId,
                            "name": self.name, 
                            "version": self.version,
                            "tag": self.tag,

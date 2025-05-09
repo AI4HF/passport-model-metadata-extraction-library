@@ -8,19 +8,21 @@ class BaseMetadataCollectionAPI:
     """
     Base class for interacting AI4HF Passport Server.
     """
-    def __init__(self, passport_server_url: str, study_id: str, organization_id: str, username: str, password: str):
+    def __init__(self, passport_server_url: str, study_id: str, experiment_id:str, organization_id: str, username: str, password: str):
         """
         Initialize the API client with authentication and study details.
         """
         self.passport_server_url = passport_server_url
         self.study_id = study_id
+        self.experiment_id = experiment_id
         self.organization_id = organization_id
         self.username = username
         self.password = password
         self.token = self._authenticate()
 
     def __str__(self):
-        return json.dumps({"passport_server_url": self.passport_server_url, "study_id": self.study_id, 
+        return json.dumps({"passport_server_url": self.passport_server_url, "study_id": self.study_id,
+                           "experiment_id": self.experiment_id,
                            "organization_id": self.organization_id, "username": self.username, 
                           "password": self.password, "token": self.token})
     
@@ -199,7 +201,8 @@ class BaseMetadataCollectionAPI:
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         payload = {  
                            "learningProcessId": model.learningProcessId, 
-                           "studyId": model.studyId, 
+                           "studyId": model.studyId,
+                           "experimentId": model.experimentId,
                            "name": model.name, 
                            "version": model.version,
                            "tag": model.tag,
@@ -244,6 +247,7 @@ class BaseMetadataCollectionAPI:
             modelId = response_json.get('modelId'),
             learningProcessId = response_json.get('learningProcessId'),
             studyId = response_json.get('studyId'),
+            experimentId= response_json.get('experimentId'),
             name = response_json.get('name'),
             owner = response_json.get('owner')
         )
@@ -293,7 +297,6 @@ class BaseMetadataCollectionAPI:
                            "dataType": evaluation_measure.dataType,
                            "description": evaluation_measure.description
                     }
-        print(payload)
 
         response = requests.post(url, json=payload, headers=headers)
 
@@ -329,6 +332,7 @@ class BaseMetadataCollectionAPI:
         user_id = jwt.decode(self.token, options={"verify_signature": False})['sub']
         model_info.learningProcessId = learning_process.learningProcessId
         model_info.studyId = self.study_id
+        model_info.experimentId = self.experiment_id
         model_info.owner = self.organization_id
         model_info.createdBy = user_id
         model_info.lastUpdatedBy = user_id

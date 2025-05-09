@@ -8,11 +8,11 @@ class SKLearnMetadataCollectionAPI(BaseMetadataCollectionAPI):
     """
     Scikit-learn library implementation for interacting AI4HF Passport Server.
     """
-    def __init__(self, passport_server_url: str, study_id: str, organization_id: str, username: str, password: str):
+    def __init__(self, passport_server_url: str, study_id: str, experiment_id:str, organization_id: str, username: str, password: str):
         """
         Initialize the API client with authentication and study details.
         """
-        super().__init__(passport_server_url, study_id, organization_id, username, password)
+        super().__init__(passport_server_url, study_id, experiment_id, organization_id, username, password)
 
     def extract_learning_process(self, model: BaseEstimator) -> Dict[str, Any]:
         """
@@ -74,6 +74,7 @@ class SKLearnMetadataCollectionAPI(BaseMetadataCollectionAPI):
         extracted_model = Model(
             learningProcessId = model_info.learningProcessId,
             studyId = model_info.studyId,
+            experimentId = model_info.experimentId,
             name = (model_info.name or type(model).__name__),
             version = model_info.version,
             tag =  model_info.tag,
