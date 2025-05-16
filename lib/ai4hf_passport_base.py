@@ -342,7 +342,7 @@ class BaseMetadataCollectionAPI:
         for evaluation_measure in evaluation_measures:
             evaluation_measure.modelId = created_model.modelId
             evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
-            print(f'Learning stage created: {evaluation_measure_response}')
+            print(f'Evaluation measure created: {evaluation_measure_response}')
         
         self.extract_and_submit_parameters(model, created_model.modelId)
         print('Given informations are sent into AI4HF Passport server!')
