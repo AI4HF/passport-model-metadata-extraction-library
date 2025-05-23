@@ -170,17 +170,18 @@ class EvaluationMeasureType(Enum):
     RMSE = "rmse"
     RMSLE = "rmsle"
     R_SQUARED = "r_squared"
-    ADJUSTED_R_SQUARED = "adjusted_r_squared"
+    ADJUSTED_R_SQUARED = "adjusted_r_squared",
+    SENSITIVITY = "sensitivity"
 
 class EvaluationMeasure:
     def __init__(self, evaluationMeasureType: EvaluationMeasureType, value: str):
         """
         Initialize the EvaluationMeasure object from evaluation measure type and the value.
         """
-        self.name = str(evaluationMeasureType)
+        self.name = evaluationMeasureType.value
         self.value = value
         self.dataType = "float"
-        self.description = f"{evaluationMeasureType} of the model"
+        self.description = f"{evaluationMeasureType.value} of the model"
         self.measureId = None
         self.modelId = None
 
