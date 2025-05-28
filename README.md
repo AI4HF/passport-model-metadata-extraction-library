@@ -1,4 +1,25 @@
 # Machine Learning Metadata Extraction Library
+
+<div align="center" style="background-color: white">
+  <a href="https://www.ai4hf.com/">
+    <img height="60px" src="assets/ai4hf_logo.svg" alt="AI4HF Project"/>
+  </a>
+</div>
+
+<br/>
+
+<p align="center">
+  <a href="https://github.com/DataTools4Heart/common-data-model">
+    <img src="https://img.shields.io/github/license/DataTools4Heart/common-data-model" alt="License">
+  </a>
+  <a href="https://img.shields.io/github/license/DataTools4Heart/releases">
+    <img src="https://img.shields.io/github/v/release/DataTools4Heart/common-data-model" alt="Releases">
+  </a>
+</p>
+
+<br/>
+
+
 This library provides a unified way to extract metadata from machine learning models built using Scikit-learn, TensorFlow/Keras, and PyTorch. It also includes a base API client to facilitate interaction with AI4HF Passport Server. Extracted metadata can be sent to AI4HF Passport Server.
 
 ## Usage
