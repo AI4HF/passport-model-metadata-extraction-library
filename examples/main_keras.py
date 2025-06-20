@@ -1,6 +1,8 @@
 import sys
 import os
 
+from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep
+
 # Add 'lib' directory to Python's module search path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
 
@@ -23,8 +25,8 @@ api_client = KerasMetadataCollectionAPI(
         study_id="initial_study",
         experiment_id="initial_experiment",
         organization_id="initial_organization",
-        username="data_scientist",
-        password="data_scientist"
+        username="data_engineer",
+        password="data_engineer"
     )
 
 # Provide learning stages
@@ -48,5 +50,18 @@ model_info = Model(
     name = "test"
 )
 
+learning_dataset = LearningDataset(datasetId="initial_dataset",
+                                   description="Finalized learning dataset for HF Risk Prediction Model Teaching")
+dataset_transformation = DatasetTransformation(title="Dataset Smoothening and Normalization",
+                                               description="Dataset is transformed by smoothening and normalization.")
+dataset_transformation_steps = [
+    DatasetTransformationStep(
+        inputFeatures="feature1",
+        outputFeatures="feature1_1",
+        method="Normalization",
+        explanation="Decimal values are normalized between 0 and 1.")
+    ]
+
 # Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info)
+api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info, learning_dataset,
+                                            dataset_transformation, dataset_transformation_steps)
