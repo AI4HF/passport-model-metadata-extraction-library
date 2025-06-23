@@ -1,5 +1,7 @@
 import json
 from enum import Enum
+from typing import Optional
+
 
 class Algorithm:
     def __init__(self, name: str, objectiveFunction: str, type: str, subType: str, algorithmId: str):
@@ -215,3 +217,53 @@ class ModelParameter:
     def __str__(self):
         return json.dumps({"modelId": self.modelId, "parameterId": self.parameterId, "type": self.type, "value": self.value})
 
+class LearningDataset:
+    def __init__(self, datasetId: str, description: str, dataTransformationId: Optional[str] = None, learningDatasetId: Optional[str] = None, studyId: Optional[str] = None):
+        """
+        Initialize the LearningDataset object from arguments.
+        """
+        self.learningDatasetId = learningDatasetId
+        self.datasetId = datasetId
+        self.studyId = studyId
+        self.dataTransformationId = dataTransformationId
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"learningDatasetId": self.learningDatasetId, "datasetId": self.datasetId, "studyId": self.studyId, "dataTransformationId": self.dataTransformationId, "description": self.description})
+
+class DatasetTransformation:
+    def __init__(self, title: str, description: str, dataTransformationId: Optional[str] = None):
+        """
+        Initialize the DatasetTransformation object from arguments.
+        """
+        self.dataTransformationId = dataTransformationId
+        self.title = title
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"dataTransformationId": self.dataTransformationId, "title": self.title, "description": self.description})
+
+class DatasetTransformationStep:
+    def __init__(self, inputFeatures: str, outputFeatures: str, method: str,
+                 explanation: str,createdAt: Optional[str] = None, lastUpdatedAt: Optional[str] = None,
+                 dataTransformationId: Optional[str] = None, stepId: Optional[str] = None, createdBy: Optional[str] = None,
+                 lastUpdatedBy: Optional[str] = None):
+        """
+        Initialize the DatasetTransformationStep object from arguments.
+        """
+        self.stepId = stepId
+        self.dataTransformationId = dataTransformationId
+        self.inputFeatures = inputFeatures
+        self.outputFeatures = outputFeatures
+        self.method = method
+        self.explanation = explanation
+        self.createdAt = createdAt
+        self.createdBy = createdBy
+        self.lastUpdatedBy = lastUpdatedBy
+        self.lastUpdatedAt = lastUpdatedAt
+
+    def __str__(self):
+        return json.dumps({"stepId": self.stepId, "dataTransformationId": self.dataTransformationId,
+                        "inputFeatures": self.inputFeatures, "outputFeatures": self.outputFeatures,
+                        "method": self.method, "explanation": self.explanation, "createdBy": self.createdBy,
+                        "createdAt": self.createdAt, "lastUpdatedBy": self.lastUpdatedBy, "lastUpdatedAt": self.lastUpdatedAt})
