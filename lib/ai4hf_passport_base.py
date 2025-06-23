@@ -415,30 +415,30 @@ class BaseMetadataCollectionAPI:
 
         """
         print('Sending given informations into AI4HF Passport server....')
-        # learning_process = self.extract_and_submit_learning_process(model)
-        # print(f'Learning process created: {learning_process}')
-        #
-        # for learning_stage in learning_stages:
-        #     learning_stage.learningProcessId = learning_process.learningProcessId
-        #     learning_stage_response = self.submit_learning_stage(learning_stage)
-        #     print(f'Learning stage created: {learning_stage_response}')
+        learning_process = self.extract_and_submit_learning_process(model)
+        print(f'Learning process created: {learning_process}')
+
+        for learning_stage in learning_stages:
+            learning_stage.learningProcessId = learning_process.learningProcessId
+            learning_stage_response = self.submit_learning_stage(learning_stage)
+            print(f'Learning stage created: {learning_stage_response}')
 
         user_id = jwt.decode(self.token, options={"verify_signature": False})['sub']
-        # model_info.learningProcessId = learning_process.learningProcessId
-        # model_info.studyId = self.study_id
-        # model_info.experimentId = self.experiment_id
-        # model_info.owner = self.organization_id
-        # model_info.createdBy = user_id
-        # model_info.lastUpdatedBy = user_id
-        # created_model: Model = self.extract_and_submit_model(model, model_info)
-        # print(f'Model created: {created_model}')
-        #
-        # for evaluation_measure in evaluation_measures:
-        #     evaluation_measure.modelId = created_model.modelId
-        #     evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
-        #     print(f'Evaluation measure created: {evaluation_measure_response}')
-        #
-        # self.extract_and_submit_parameters(model, created_model.modelId)
+        model_info.learningProcessId = learning_process.learningProcessId
+        model_info.studyId = self.study_id
+        model_info.experimentId = self.experiment_id
+        model_info.owner = self.organization_id
+        model_info.createdBy = user_id
+        model_info.lastUpdatedBy = user_id
+        created_model: Model = self.extract_and_submit_model(model, model_info)
+        print(f'Model created: {created_model}')
+
+        for evaluation_measure in evaluation_measures:
+            evaluation_measure.modelId = created_model.modelId
+            evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
+            print(f'Evaluation measure created: {evaluation_measure_response}')
+
+        self.extract_and_submit_parameters(model, created_model.modelId)
 
         learning_dataset.studyId = self.study_id
         response_learning_dataset, response_dataset_transformation = self.submit_learning_dataset_and_transformation(

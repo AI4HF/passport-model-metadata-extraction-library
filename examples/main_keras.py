@@ -25,8 +25,8 @@ api_client = KerasMetadataCollectionAPI(
         study_id="initial_study",
         experiment_id="initial_experiment",
         organization_id="initial_organization",
-        username="data_engineer",
-        password="data_engineer"
+        username="data_scientist",
+        password="data_scientist"
     )
 
 # Provide learning stages
