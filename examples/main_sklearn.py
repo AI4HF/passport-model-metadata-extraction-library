@@ -29,13 +29,29 @@ classifier.fit(X_train, y_train)
 
 # Construct an api client for interacting with AI4HF passport server
 api_client = SKLearnMetadataCollectionAPI(
-        passport_server_url="http://localhost:80/ai4hf/passport/api",
-        study_id="initial_study",
-        experiment_id="initial_experiment",
-        organization_id="initial_organization",
-        username="data_scientist",
-        password="data_scientist"
-    )
+    passport_server_url="http://localhost:80/ai4hf/passport/api",
+    study_id="0197a6f8-2b78-71e4-81c1-b7b6a744ece3",
+    experiment_id="0197a6f9-1f49-74a5-ab8a-e64fae0ca141",
+    organization_id="0197a6f5-bb48-7855-b248-95697e913f22",
+    connector_secret="eyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwi"
+                     "a2lkIiA6ICI5ZTFiZTExNi0yMzg1LTRlZDctYTBi"
+                     "OC01ZDc0NWNjYzllOGMifQ.eyJpYXQiOjE3NTEyN"
+                     "zA4MjgsImp0aSI6ImIxMWE5NGI1LWQ5MzItNDhiN"
+                     "C1iMjc4LWFkZjQ1ZDJjMTMxOCIsImlzcyI6Imh0d"
+                     "HA6Ly9rZXljbG9hazo4MDgwL3JlYWxtcy9BSTRIR"
+                     "i1BdXRob3JpemF0aW9uIiwiYXVkIjoiaHR0cDovL"
+                     "2tleWNsb2FrOjgwODAvcmVhbG1zL0FJNEhGLUF1d"
+                     "Ghvcml6YXRpb24iLCJzdWIiOiJkYXRhX3NjaWVud"
+                     "GlzdCIsInR5cCI6Ik9mZmxpbmUiLCJhenAiOiJBS"
+                     "TRIRi1BdXRoIiwic2Vzc2lvbl9zdGF0ZSI6IjE3Y"
+                     "zU2ZjhkLTljZmEtNDM2OC05MzQ4LTkzN2ZjY2QyM"
+                     "jY0ZCIsInNjb3BlIjoib2ZmbGluZV9hY2Nlc3Mgc"
+                     "HJvZmlsZSBlbWFpbCIsInNpZCI6IjE3YzU2ZjhkL"
+                     "TljZmEtNDM2OC05MzQ4LTkzN2ZjY2QyMjY0ZCJ9."
+                     "obYaa744bmJoQAFO-nh1sCwPKwArWaOUo9_a1I0U"
+                     "zc--HBuTLy6oOJVmnVI62bxnMkqoYo97SYGlKGKw"
+                     "VStz5g"
+)
 
 # Provide learning stages
 learning_stages = [
@@ -58,7 +74,7 @@ model_info = Model(
     name = "test"
 )
 
-learning_dataset = LearningDataset(datasetId="initial_dataset",
+learning_dataset = LearningDataset(datasetId="0197a6fa-6507-775b-99d9-f8808e10052d",
                                    description="Finalized learning dataset for HF Risk Prediction Model Teaching")
 dataset_transformation = DatasetTransformation(title="Dataset Smoothening and Normalization",
                                                description="Dataset is transformed by smoothening and normalization.")

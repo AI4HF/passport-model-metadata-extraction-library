@@ -10,8 +10,7 @@ class BaseMetadataCollectionAPI:
     Base class for interacting AI4HF Passport Server.
     """
 
-    def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str, username: str,
-                 password: str):
+    def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str, connector_secret: str):
         """
         Initialize the API client with authentication and study details.
         """
@@ -19,15 +18,13 @@ class BaseMetadataCollectionAPI:
         self.study_id = study_id
         self.experiment_id = experiment_id
         self.organization_id = organization_id
-        self.username = username
-        self.password = password
+        self.connector_secret = connector_secret
         self.token = self._authenticate()
 
     def __str__(self):
         return json.dumps({"passport_server_url": self.passport_server_url, "study_id": self.study_id,
-                           "experiment_id": self.experiment_id,
-                           "organization_id": self.organization_id, "username": self.username,
-                           "password": self.password, "token": self.token})
+                           "experiment_id": self.experiment_id, "organization_id": self.organization_id,
+                           "connector_secret": self.connector_secret, "token": self.token})
 
     def _refreshTokenAndRetry(self, response, headers, payload, url):
         """
@@ -52,14 +49,9 @@ class BaseMetadataCollectionAPI:
         """
         Authenticate with login endpoint and retrieve an access token.
         """
-        auth_url = f"{self.passport_server_url}/user/login"
+        auth_url = f"{self.passport_server_url}/user/connector/login"
 
-        data = {
-            "username": self.username,
-            "password": self.password
-        }
-
-        response = requests.post(auth_url, json=data)
+        response = requests.post(auth_url, data=self.connector_secret)
         response.raise_for_status()
         return response.json().get("access_token")
 
