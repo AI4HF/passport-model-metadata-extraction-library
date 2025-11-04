@@ -396,7 +396,8 @@ class BaseMetadataCollectionAPI:
                                          model_info: Model,
                                          learning_dataset: LearningDataset,
                                          dataset_transformation: DatasetTransformation,
-                                         dataset_transformation_steps: list[DatasetTransformationStep]):
+                                         dataset_transformation_steps: list[DatasetTransformationStep],
+                                         model_figures: list[ModelFigure]):
         """
         Submit results of the ML model to the AI4HF Passport Server.
 
@@ -404,6 +405,7 @@ class BaseMetadataCollectionAPI:
         :param learning_stages: The list of learning stages.
         :param evaluation_measures: The list of evaluation measures.
         :param model_info: Model class for model related fields.
+        :param model_figures: The list of model figures.
 
         """
         print('Sending given informations into AI4HF Passport server....')
@@ -446,6 +448,11 @@ class BaseMetadataCollectionAPI:
             response_dataset_transformation_step = self.submit_dataset_transformation_step(
                 dataset_transformation_step=dataset_transformation_step)
             print(f'Dataset Transformation Step created: {response_dataset_transformation_step}')
+
+        for model_figure in model_figures:
+            model_figure.modelId = created_model.modelId
+            model_figure_response = self.submit_model_figure(model_figure)
+            print(f'Model Figure created: {model_figure_response}')
 
         print('Given informations are sent into AI4HF Passport server!')
         pass
@@ -533,3 +540,26 @@ class BaseMetadataCollectionAPI:
             print(f'Model Parameter created: {created_model_parameter}')
 
         pass
+
+    def submit_model_figure(self, model_figure: ModelFigure) -> ModelFigure:
+        """
+        Submit ModelFigure to the AI4HF Passport Server.
+
+        :param model_figure: ModelFigure object to be sent.
+
+        :return ModelFigure: Created ModelFigure object from the server.
+        """
+        url = f"{self.passport_server_url}/model-figure?studyId={self.study_id}"
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {"modelId": model_figure.modelId, "imageBase64": model_figure.imageBase64}
+
+        response = requests.post(url, json=payload, headers=headers)
+
+        # If token is expired, retry
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+
+        response.raise_for_status()
+        response_json: dict = response.json()
+        return ModelFigure(response_json.get('imageBase64'),
+                           response_json.get('figureId'),
+                           response_json.get('modelId'))

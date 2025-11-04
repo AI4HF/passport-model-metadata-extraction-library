@@ -1,8 +1,11 @@
 import sys
 import os
 import random
+import io
+import matplotlib.pyplot as plt
+import base64
 
-from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep
+from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep, ModelFigure
 
 # Add 'lib' directory to Python's module search path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
@@ -107,6 +110,20 @@ dataset_transformation_steps = [
         explanation="Decimal values are normalized between 0 and 1.")
 ]
 
+# Create an example figure using Matplotlib
+fig, ax = plt.subplots()
+ax.plot([0,1,2],[3,2,5])
+buf = io.BytesIO()
+fig.savefig(buf, format="png")
+buf.seek(0)
+image_bytes = buf.read()
+image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+# Define a model figure object for this figure
+model_figures = [
+    ModelFigure(imageBase64=image_b64)
+]
+
 # Call this function with your model object
 api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info, learning_dataset,
-                                            dataset_transformation, dataset_transformation_steps)
+                                            dataset_transformation, dataset_transformation_steps, model_figures)

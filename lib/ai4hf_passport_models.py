@@ -15,9 +15,9 @@ class Algorithm:
         self.algorithmId = algorithmId
 
     def __str__(self):
-        return json.dumps({"algorithmId": self.algorithmId, "name": self.name, "objectiveFunction": self.objectiveFunction, "type": self.type, 
+        return json.dumps({"algorithmId": self.algorithmId, "name": self.name, "objectiveFunction": self.objectiveFunction, "type": self.type,
                           "subType": self.subType})
-    
+
 class Implementation:
     def __init__(self, name: str, software: str, description: str, algorithmId: str, implementationId: str):
         """
@@ -30,7 +30,7 @@ class Implementation:
         self.implementationId = implementationId
 
     def __str__(self):
-        return json.dumps({"name": self.name, "software": self.software, "description": self.description, "algorithmId": self.algorithmId, 
+        return json.dumps({"name": self.name, "software": self.software, "description": self.description, "algorithmId": self.algorithmId,
                           "implementationId": self.implementationId})
 
 class LearningProcess:
@@ -42,7 +42,7 @@ class LearningProcess:
         self.studyId = studyId
         self.implementationId = implementationId
         self.description = description
-    
+
     def __str__(self):
         return json.dumps({"learningProcessId": self.learningProcessId, "studyId": self.studyId, "implementationId": self.implementationId, "description": self.description})
 
@@ -68,16 +68,16 @@ class LearningStage:
         elif learningStageType == LearningStageType.VALIDATION:
             self.learningStageName = "Model Validation"
             self.description = "Validation dataset of the model"
-        
+
         self.datasetPercentage = datasetPercentage
         self.learningStageId = None
         self.learningProcessId = None
 
     def __str__(self):
         return json.dumps({"learningStageId": self.learningStageId, "learningProcessId": self.learningProcessId, "learningStageName": self.learningStageName, "datasetPercentage": self.datasetPercentage, "description": self.description})
-    
+
 class Model:
-    def __init__(self,  
+    def __init__(self,
                  version: str = "",
                  tag: str = "",
                  productIdentifier: str = "",
@@ -92,8 +92,8 @@ class Model:
                  fairnessConstraints: str = "",
                  createdBy: str = None,
                  lastUpdatedBy: str = None,
-                 modelId: str = None, 
-                 learningProcessId: str = None, 
+                 modelId: str = None,
+                 learningProcessId: str = None,
                  studyId: str = None,
                  experimentId: str = None,
                  name: str = None,
@@ -125,11 +125,11 @@ class Model:
         self.lastUpdatedBy = lastUpdatedBy
 
     def __str__(self):
-        return json.dumps({"modelId": self.modelId, 
-                           "learningProcessId": self.learningProcessId, 
+        return json.dumps({"modelId": self.modelId,
+                           "learningProcessId": self.learningProcessId,
                            "studyId": self.studyId,
                            "experimentId": self.experimentId,
-                           "name": self.name, 
+                           "name": self.name,
                            "version": self.version,
                            "tag": self.tag,
                            "modelType": self.modelType,
@@ -189,7 +189,7 @@ class EvaluationMeasure:
 
     def __str__(self):
         return json.dumps({"measureId": self.measureId, "modelId": self.modelId, "name": self.name, "value": self.value, "dataType": self.dataType, "description": self.description})
-    
+
 class Parameter:
     def __init__(self, parameterId: str, studyId: str, name: str, dataType: str, description: str):
         """
@@ -213,7 +213,7 @@ class ModelParameter:
         self.parameterId = parameterId
         self.type = type
         self.value = value
-    
+
     def __str__(self):
         return json.dumps({"modelId": self.modelId, "parameterId": self.parameterId, "type": self.type, "value": self.value})
 
@@ -267,3 +267,16 @@ class DatasetTransformationStep:
                         "inputFeatures": self.inputFeatures, "outputFeatures": self.outputFeatures,
                         "method": self.method, "explanation": self.explanation, "createdBy": self.createdBy,
                         "createdAt": self.createdAt, "lastUpdatedBy": self.lastUpdatedBy, "lastUpdatedAt": self.lastUpdatedAt})
+
+
+class ModelFigure:
+    def __init__(self, imageBase64: str, figureId: Optional[str] = None, modelId: Optional[str] = None):
+        """
+        Initialize the ModelFigure object from arguments.
+        """
+        self.figureId = figureId
+        self.modelId = modelId
+        self.imageBase64 = imageBase64
+
+    def __str__(self):
+        return json.dumps({"figureId": self.figureId, "modelId": self.modelId, "imageBase64": self.imageBase64})
