@@ -97,11 +97,23 @@ dataset_transformation_steps = [
 ]
 
 
-# Create an example figure using Matplotlib
+# Example accuracy values across training epochs
+epochs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+accuracy = [0.55, 0.60, 0.63, 0.67, 0.70, 0.74, 0.77, 0.79, 0.82, 0.85]
+
+# Create the plot
 fig, ax = plt.subplots()
-ax.plot([0,1,2],[3,2,5])
+ax.plot(epochs, accuracy, marker='o', linestyle='-', color='b')
+
+# Add title, labels, and grid
+ax.set_title("Model Accuracy Over Epochs", fontsize=14, fontweight='bold')
+ax.set_xlabel("Epoch", fontsize=12)
+ax.set_ylabel("Accuracy", fontsize=12)
+ax.grid(True, linestyle='--', alpha=0.6)
+
+# Save the figure to a BytesIO buffer and convert it to Base64
 buf = io.BytesIO()
-fig.savefig(buf, format="png")
+fig.savefig(buf, format="png", bbox_inches="tight")
 buf.seek(0)
 image_bytes = buf.read()
 image_b64 = base64.b64encode(image_bytes).decode("utf-8")
