@@ -174,6 +174,8 @@ class EvaluationMeasureType(Enum):
     R_SQUARED = "r_squared"
     ADJUSTED_R_SQUARED = "adjusted_r_squared",
     SENSITIVITY = "sensitivity"
+    NPV = "npv"
+    PPV = "ppv"
 
 class EvaluationMeasure:
     def __init__(self, evaluationMeasureType: EvaluationMeasureType, value: str):
