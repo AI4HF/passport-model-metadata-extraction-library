@@ -164,7 +164,7 @@ class EvaluationMeasureType(Enum):
     SPECIFICITY = "specificity"
     FALSE_POSITIVE_RATE = "false_positive_rate"
     FALSE_NEGATIVE_RATE = "false_negative_rate"
-    F1_SCORE = "f1_score"
+    F1_SCORE = "f1"
     ROC = "roc"
     AUC = "auc"
     MAE = "mae"
