@@ -178,6 +178,6 @@ model_figures = [
 ]
 
 # Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info, learning_dataset,
+api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, evaluation_measure_for_model, model_info, learning_dataset,
                                             dataset_transformation, dataset_transformation_steps, model_figures,
                                             learning_process_parameters, learning_stage_parameters)
