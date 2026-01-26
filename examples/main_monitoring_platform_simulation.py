@@ -5,7 +5,8 @@ import io
 import matplotlib.pyplot as plt
 import base64
 
-from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep, ModelFigure
+from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep, ModelFigure, \
+    LearningStageParameter, LearningProcessParameter
 
 # Add 'lib' directory to Python's module search path
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
@@ -62,7 +63,47 @@ learning_stages = [
     LearningStage(learningStageType = LearningStageType.TRAINING,
                   datasetPercentage = 70),
     LearningStage(learningStageType = LearningStageType.TEST,
-                  datasetPercentage = 30)
+                  datasetPercentage = 20),
+    LearningStage(learningStageType = LearningStageType.VALIDATION,
+                  datasetPercentage = 10)
+]
+
+learning_stage_parameters = [
+    LearningStageParameter(
+        name="k_folds",
+        learningStageId= str(LearningStageType.VALIDATION),
+        parameterId="",
+        type="integer",
+        value="5",
+        description="Number of folds used in k-fold cross validation during validation stage"
+    ),
+    LearningStageParameter(
+        name="shuffle",
+        learningStageId= str(LearningStageType.VALIDATION),
+        parameterId="",
+        type="boolean",
+        value="true",
+        description="Whether the dataset is shuffled before splitting into folds"
+    )
+]
+
+learning_process_parameters = [
+    LearningProcessParameter(
+        name="n_clusters",
+        learningProcessId="",
+        parameterId="",
+        type="integer",
+        value="5",
+        description="Number of clusters (k) used by the K-Means algorithm"
+    ),
+    LearningProcessParameter(
+        name="random_state",
+        learningProcessId="",
+        parameterId="",
+        type="integer",
+        value="42",
+        description="Random seed used for centroid initialization"
+    )
 ]
 
 # Evaluation measure types for the monitoring platform simulation
@@ -138,4 +179,5 @@ model_figures = [
 
 # Call this function with your model object
 api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info, learning_dataset,
-                                            dataset_transformation, dataset_transformation_steps, model_figures)
+                                            dataset_transformation, dataset_transformation_steps, model_figures,
+                                            learning_process_parameters, learning_stage_parameters)
