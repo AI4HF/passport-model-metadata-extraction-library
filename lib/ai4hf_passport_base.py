@@ -397,7 +397,9 @@ class BaseMetadataCollectionAPI:
                                          learning_dataset: LearningDataset,
                                          dataset_transformation: DatasetTransformation,
                                          dataset_transformation_steps: list[DatasetTransformationStep],
-                                         model_figures: list[ModelFigure]):
+                                         model_figures: list[ModelFigure],
+                                         learning_process_parameters: list[LearningProcessParameter],
+                                         learning_stage_parameters: list[LearningStageParameter]):
         """
         Submit results of the ML model to the AI4HF Passport Server.
 
@@ -406,15 +408,33 @@ class BaseMetadataCollectionAPI:
         :param evaluation_measures: The list of evaluation measures.
         :param model_info: Model class for model related fields.
         :param model_figures: The list of model figures.
+        :param learning_process_parameters: The list of learning process parameters.
+        :param learning_stage_parameters: The list of learning stage parameters.
 
         """
         print('Sending given informations into AI4HF Passport server....')
         learning_process = self.extract_and_submit_learning_process(model)
         print(f'Learning process created: {learning_process}')
 
+        augmented_learning_process_parameters = []
+        for learning_process_parameter in learning_process_parameters:
+            learning_process_parameter.learningProcessId = learning_process.learningProcessId
+            augmented_learning_process_parameters.append(learning_process_parameter)
+
+        augmented_learning_stage_parameters = []
         for learning_stage in learning_stages:
             learning_stage.learningProcessId = learning_process.learningProcessId
             learning_stage_response = self.submit_learning_stage(learning_stage)
+            for learning_stage_parameter in learning_stage_parameters:
+                if learning_stage.learningStageName == "Model Testing" and learning_stage_parameter.learningStageId == str(LearningStageType.TEST):
+                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
+                    augmented_learning_stage_parameters.append(learning_stage_parameter)
+                elif learning_stage.learningStageName == "Model Training" and learning_stage_parameter.learningStageId == str(LearningStageType.TRAINING):
+                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
+                    augmented_learning_stage_parameters.append(learning_stage_parameter)
+                elif learning_stage.learningStageName == "Model Validation" and learning_stage_parameter.learningStageId == str(LearningStageType.VALIDATION):
+                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
+                    augmented_learning_stage_parameters.append(learning_stage_parameter)
             print(f'Learning stage created: {learning_stage_response}')
 
         user_id = jwt.decode(self.token, options={"verify_signature": False})['sub']
@@ -432,7 +452,7 @@ class BaseMetadataCollectionAPI:
             evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
             print(f'Evaluation measure created: {evaluation_measure_response}')
 
-        self.extract_and_submit_parameters(model, created_model.modelId)
+        self.extract_and_submit_parameters(model, created_model.modelId, augmented_learning_process_parameters, augmented_learning_stage_parameters)
 
         learning_dataset.studyId = self.study_id
         response_learning_dataset, response_dataset_transformation = self.submit_learning_dataset_and_transformation(
@@ -480,6 +500,50 @@ class BaseMetadataCollectionAPI:
                          response_json.get('name'), response_json.get('dataType'),
                          response_json.get('description'))
 
+    def submit_learning_stage_parameter(self, learning_stage_parameter: LearningStageParameter) -> LearningStageParameter:
+        """
+        Submit Learning Stage Parameter to the AI4HF Passport Server.
+
+        :param learning_stage_parameter: Learning Stage Parameter object to be sent.
+
+        :return LearningStageParameter: Created Learning Stage Parameter object from the server.
+        """
+        url = f"{self.passport_server_url}/learning-stage-parameter?studyId={self.study_id}"
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {"learningStageId": learning_stage_parameter.learningStageId, "parameterId": learning_stage_parameter.parameterId, "type": learning_stage_parameter.type,
+                   "value": learning_stage_parameter.value}
+        response = requests.post(url, json=payload, headers=headers)
+
+        # If token is expired, retry
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+
+        response.raise_for_status()
+        response_json: dict = response.json()
+        return LearningStageParameter(learning_stage_parameter.name,response_json.get("id").get('learningStageId'), response_json.get("id").get('parameterId'),
+                         response_json.get('type'), response_json.get('value'), learning_stage_parameter.description)
+
+    def submit_learning_process_parameter(self, learning_process_parameter: LearningProcessParameter) -> LearningProcessParameter:
+        """
+        Submit Learning Process Parameter to the AI4HF Passport Server.
+
+        :param learning_process_parameter: Learning Process Parameter object to be sent.
+
+        :return LearningProcessParameter: Created Learning Process Parameter object from the server.
+        """
+        url = f"{self.passport_server_url}/learning-process-parameter?studyId={self.study_id}"
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {"learningProcessId": learning_process_parameter.learningProcessId, "parameterId": learning_process_parameter.parameterId, "type": learning_process_parameter.type,
+                   "value": learning_process_parameter.value}
+        response = requests.post(url, json=payload, headers=headers)
+
+        # If token is expired, retry
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+
+        response.raise_for_status()
+        response_json: dict = response.json()
+        return LearningProcessParameter(learning_process_parameter.name, response_json.get("id").get('learningProcessId'), response_json.get("id").get('parameterId'),
+                                      response_json.get('type'), response_json.get('value'), learning_process_parameter.description)
+
     def submit_model_parameter(self, model_parameter: ModelParameter) -> ModelParameter:
         """
         Submit ModelParameter to the AI4HF Passport Server.
@@ -516,12 +580,16 @@ class BaseMetadataCollectionAPI:
         pass
 
     def extract_and_submit_parameters(self,
-                                      model: Any, model_id: str):
+                                      model: Any, model_id: str,
+                                      learning_process_parameters: list[LearningProcessParameter],
+                                      learning_stage_parameters: list[LearningStageParameter]):
         """
         Extract and submit parameters into the server.
 
         :param model: Model class that specific to implemented library.
         :param model_id: The ID of the model.
+        :param learning_process_parameters: List of Learning Process Parameter objects.
+        :param learning_stage_parameters: List of Learning Stage Parameter objects.
 
         :return response: Response json from the server.
         """
@@ -538,6 +606,28 @@ class BaseMetadataCollectionAPI:
                                              extracted_parameter_dict.get('value', None))
             created_model_parameter = self.submit_model_parameter(model_parameter)
             print(f'Model Parameter created: {created_model_parameter}')
+
+        for learning_process_parameter in learning_process_parameters:
+            linked_parameter = Parameter(parameterId="",
+                                         studyId=self.study_id,
+                                         name=learning_process_parameter.name,
+                                         dataType=learning_process_parameter.type,
+                                         description=learning_process_parameter.description)
+            created_parameter = self.submit_parameter(linked_parameter)
+            learning_process_parameter.parameterId = created_parameter.parameterId
+            created_learning_process_parameter = self.submit_learning_process_parameter(learning_process_parameter)
+            print(f'Learning Process Parameter created: {created_learning_process_parameter}')
+
+        for learning_stage_parameter in learning_stage_parameters:
+            linked_parameter = Parameter(parameterId="",
+                                         studyId=self.study_id,
+                                         name=learning_stage_parameter.name,
+                                         dataType=learning_stage_parameter.type,
+                                         description=learning_stage_parameter.description)
+            created_parameter = self.submit_parameter(linked_parameter)
+            learning_stage_parameter.parameterId = created_parameter.parameterId
+            created_learning_stage_parameter = self.submit_learning_stage_parameter(learning_stage_parameter)
+            print(f'Learning Stage Parameter created: {created_learning_stage_parameter}')
 
         pass
 

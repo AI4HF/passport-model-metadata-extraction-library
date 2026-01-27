@@ -46,6 +46,21 @@ class LearningProcess:
     def __str__(self):
         return json.dumps({"learningProcessId": self.learningProcessId, "studyId": self.studyId, "implementationId": self.implementationId, "description": self.description})
 
+class LearningProcessParameter:
+    def __init__(self, name: str, learningProcessId: str, parameterId: str, type: str, value: str, description: str):
+        """
+        Initialize the LearningProcess object from arguments.
+        """
+        self.name = name
+        self.learningProcessId = learningProcessId
+        self.parameterId = parameterId
+        self.type = type
+        self.value = value
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"name": self.name, "learningProcessId": self.learningProcessId, "parameterId": self.parameterId, "type": self.type, "value": self.value, "description": self.description})
+
 class LearningStageType(Enum):
     """
         Type of learning stages. It contains three type: TEST, VALIDATION, TRAINING
@@ -76,6 +91,20 @@ class LearningStage:
     def __str__(self):
         return json.dumps({"learningStageId": self.learningStageId, "learningProcessId": self.learningProcessId, "learningStageName": self.learningStageName, "datasetPercentage": self.datasetPercentage, "description": self.description})
 
+class LearningStageParameter:
+    def __init__(self, name: str, learningStageId: str, parameterId: str, type: str, value: str, description: str):
+        """
+        Initialize the LearningProcess object from arguments.
+        """
+        self.name = name
+        self.learningStageId = learningStageId
+        self.parameterId = parameterId
+        self.type = type
+        self.value = value
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"name": self.name, "learningStageId": self.learningStageId, "parameterId": self.parameterId, "type": self.type, "value": self.value, "description": self.description})
 class Model:
     def __init__(self,
                  version: str = "",
