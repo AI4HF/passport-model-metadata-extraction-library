@@ -12,7 +12,7 @@ from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, Da
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
 
 from ai4hf_passport_sklearn import SKLearnMetadataCollectionAPI
-from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, LearningStageType, EvaluationMeasureType
+from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, ModelEvaluation, LearningStageType, EvaluationMeasureType
 import pandas as pd
 
 # Example usage of sklearn library
@@ -130,6 +130,13 @@ for index, evaluation_measure_type in enumerate(evaluation_measure_types):
 
         arr[index].append(EvaluationMeasure(evaluation_measure_type, final_value))
 
+# Provide the evaluation run the measures were produced in
+model_evaluation = ModelEvaluation(
+    trigger = "training",
+    aggregationMethod = "weighted-average",
+    description = "Training evaluation of the model."
+)
+
 for i in range(number_of_models):
     evaluation_measure_for_model = []
     for index, _ in enumerate(evaluation_measure_types):
@@ -178,6 +185,6 @@ model_figures = [
 ]
 
 # Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, evaluation_measure_for_model, model_info, learning_dataset,
+api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, model_evaluation, evaluation_measure_for_model, model_info, learning_dataset,
                                             dataset_transformation, dataset_transformation_steps, model_figures,
                                             learning_process_parameters, learning_stage_parameters)

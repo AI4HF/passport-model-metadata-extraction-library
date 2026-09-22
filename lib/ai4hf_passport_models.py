@@ -126,7 +126,9 @@ class Model:
                  studyId: str = None,
                  experimentId: str = None,
                  name: str = None,
-                 owner: str = None,
+                 ownerOrganizationId: str = None,
+                 previousModelId: str = None,
+                 retrainingReason: str = None,
                  modelType: str = None):
         """
         Initialize the Model object from arguments.
@@ -140,7 +142,9 @@ class Model:
         self.tag = tag
         self.modelType = modelType
         self.productIdentifier = productIdentifier
-        self.owner = owner
+        self.ownerOrganizationId = ownerOrganizationId
+        self.previousModelId = previousModelId
+        self.retrainingReason = retrainingReason
         self.trlLevel = trlLevel
         self.license = license
         self.primaryUse = primaryUse
@@ -206,6 +210,58 @@ class EvaluationMeasureType(Enum):
     NPV = "npv"
     PPV = "ppv"
 
+class ModelEvaluation:
+    def __init__(self,
+                 trigger: str = "training",
+                 aggregationMethod: str = None,
+                 executedAt: str = None,
+                 executedBy: str = None,
+                 description: str = None,
+                 modelEvaluationId: Optional[str] = None,
+                 modelId: Optional[str] = None,
+                 organizationId: Optional[str] = None):
+        """
+        Initialize the ModelEvaluation object from arguments. One evaluation run of a model; the measures
+        it produced hang off it, and the learning datasets it was computed over are linked through
+        ModelEvaluationDataset. organizationId stays None for federated training aggregates.
+        """
+        self.modelEvaluationId = modelEvaluationId
+        self.modelId = modelId
+        self.organizationId = organizationId
+        self.trigger = trigger
+        self.aggregationMethod = aggregationMethod
+        self.executedAt = executedAt
+        self.executedBy = executedBy
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"modelEvaluationId": self.modelEvaluationId, "modelId": self.modelId,
+                           "organizationId": self.organizationId, "trigger": self.trigger,
+                           "aggregationMethod": self.aggregationMethod, "executedAt": self.executedAt,
+                           "executedBy": self.executedBy, "description": self.description})
+
+
+class ModelEvaluationDataset:
+    def __init__(self,
+                 learningDatasetId: str,
+                 weight: Optional[float] = None,
+                 description: Optional[str] = None,
+                 modelEvaluationId: Optional[str] = None):
+        """
+        Initialize the ModelEvaluationDataset object from arguments. A federated aggregate links one row
+        per participating organization.
+        """
+        self.modelEvaluationId = modelEvaluationId
+        self.learningDatasetId = learningDatasetId
+        self.weight = weight
+        self.description = description
+
+    def __str__(self):
+        return json.dumps({"modelEvaluationId": self.modelEvaluationId,
+                           "learningDatasetId": self.learningDatasetId,
+                           "weight": self.weight, "description": self.description})
+
+
 class EvaluationMeasure:
     def __init__(self, evaluationMeasureType: EvaluationMeasureType, value: str):
         """
@@ -215,6 +271,7 @@ class EvaluationMeasure:
         self.value = value
         self.dataType = "float"
         self.description = f"{evaluationMeasureType.value} of the model"
+        self.modelEvaluationId = None
         self.measureId = None
         self.modelId = None
 
@@ -249,41 +306,41 @@ class ModelParameter:
         return json.dumps({"modelId": self.modelId, "parameterId": self.parameterId, "type": self.type, "value": self.value})
 
 class LearningDataset:
-    def __init__(self, datasetId: str, description: str, dataTransformationId: Optional[str] = None, learningDatasetId: Optional[str] = None, studyId: Optional[str] = None):
+    def __init__(self, datasetId: str, description: str, datasetTransformationId: Optional[str] = None, learningDatasetId: Optional[str] = None, studyId: Optional[str] = None):
         """
         Initialize the LearningDataset object from arguments.
         """
         self.learningDatasetId = learningDatasetId
         self.datasetId = datasetId
         self.studyId = studyId
-        self.dataTransformationId = dataTransformationId
+        self.datasetTransformationId = datasetTransformationId
         self.description = description
 
     def __str__(self):
-        return json.dumps({"learningDatasetId": self.learningDatasetId, "datasetId": self.datasetId, "studyId": self.studyId, "dataTransformationId": self.dataTransformationId, "description": self.description})
+        return json.dumps({"learningDatasetId": self.learningDatasetId, "datasetId": self.datasetId, "studyId": self.studyId, "datasetTransformationId": self.datasetTransformationId, "description": self.description})
 
 class DatasetTransformation:
-    def __init__(self, title: str, description: str, dataTransformationId: Optional[str] = None):
+    def __init__(self, title: str, description: str, datasetTransformationId: Optional[str] = None):
         """
         Initialize the DatasetTransformation object from arguments.
         """
-        self.dataTransformationId = dataTransformationId
+        self.datasetTransformationId = datasetTransformationId
         self.title = title
         self.description = description
 
     def __str__(self):
-        return json.dumps({"dataTransformationId": self.dataTransformationId, "title": self.title, "description": self.description})
+        return json.dumps({"datasetTransformationId": self.datasetTransformationId, "title": self.title, "description": self.description})
 
 class DatasetTransformationStep:
     def __init__(self, inputFeatures: str, outputFeatures: str, method: str,
                  explanation: str,createdAt: Optional[str] = None, lastUpdatedAt: Optional[str] = None,
-                 dataTransformationId: Optional[str] = None, stepId: Optional[str] = None, createdBy: Optional[str] = None,
+                 datasetTransformationId: Optional[str] = None, stepId: Optional[str] = None, createdBy: Optional[str] = None,
                  lastUpdatedBy: Optional[str] = None):
         """
         Initialize the DatasetTransformationStep object from arguments.
         """
         self.stepId = stepId
-        self.dataTransformationId = dataTransformationId
+        self.datasetTransformationId = datasetTransformationId
         self.inputFeatures = inputFeatures
         self.outputFeatures = outputFeatures
         self.method = method
@@ -294,20 +351,24 @@ class DatasetTransformationStep:
         self.lastUpdatedAt = lastUpdatedAt
 
     def __str__(self):
-        return json.dumps({"stepId": self.stepId, "dataTransformationId": self.dataTransformationId,
+        return json.dumps({"stepId": self.stepId, "datasetTransformationId": self.datasetTransformationId,
                         "inputFeatures": self.inputFeatures, "outputFeatures": self.outputFeatures,
                         "method": self.method, "explanation": self.explanation, "createdBy": self.createdBy,
                         "createdAt": self.createdAt, "lastUpdatedBy": self.lastUpdatedBy, "lastUpdatedAt": self.lastUpdatedAt})
 
 
 class ModelFigure:
-    def __init__(self, imageBase64: str, figureId: Optional[str] = None, modelId: Optional[str] = None):
+    def __init__(self, imageBase64: str, figureId: Optional[str] = None, modelId: Optional[str] = None,
+                 title: Optional[str] = None, description: Optional[str] = None):
         """
         Initialize the ModelFigure object from arguments.
         """
         self.figureId = figureId
         self.modelId = modelId
+        self.title = title
+        self.description = description
         self.imageBase64 = imageBase64
 
     def __str__(self):
-        return json.dumps({"figureId": self.figureId, "modelId": self.modelId, "imageBase64": self.imageBase64})
+        return json.dumps({"figureId": self.figureId, "modelId": self.modelId, "title": self.title,
+                           "description": self.description, "imageBase64": self.imageBase64})

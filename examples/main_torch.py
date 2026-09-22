@@ -10,7 +10,7 @@ from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, Da
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
 
 from ai4hf_passport_torch import TorchMetadataCollectionAPI
-from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, LearningStageType, EvaluationMeasureType
+from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, ModelEvaluation, LearningStageType, EvaluationMeasureType
 import torch
 import torch.nn as nn
 
@@ -121,6 +121,13 @@ evaluation_measures = [
                       value = "0.88")
 ]
 
+# Provide the evaluation run the measures were produced in
+model_evaluation = ModelEvaluation(
+    trigger = "training",
+    aggregationMethod = "weighted-average",
+    description = "Training evaluation of the model."
+)
+
 # Provide model details
 model_info = Model(
     name = "test")
@@ -165,6 +172,6 @@ model_figures = [
 ]
 
 # Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(model, learning_stages, evaluation_measures, model_info, learning_dataset,
+api_client.submit_results_to_ai4hf_passport(model, learning_stages, model_evaluation, evaluation_measures, model_info, learning_dataset,
                                             dataset_transformation, dataset_transformation_steps, model_figures,
                                             learning_process_parameters, learning_stage_parameters)

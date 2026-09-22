@@ -178,15 +178,15 @@ class BaseMetadataCollectionAPI:
         return_learning_dataset = LearningDataset(datasetId=response_learning_dataset.get('datasetId'),
                                                   studyId=response_learning_dataset.get('studyId'),
                                                   description=response_learning_dataset.get('description'),
-                                                  dataTransformationId=response_learning_dataset.get(
-                                                      'dataTransformationId'),
+                                                  datasetTransformationId=response_learning_dataset.get(
+                                                      'datasetTransformationId'),
                                                   learningDatasetId=response_learning_dataset.get('learningDatasetId'))
 
         return_dataset_transformation = DatasetTransformation(title=response_dataset_transformation.get('title'),
                                                               description=response_dataset_transformation.get(
                                                                   'description'),
-                                                              dataTransformationId=response_dataset_transformation.get(
-                                                                  'dataTransformationId'))
+                                                              datasetTransformationId=response_dataset_transformation.get(
+                                                                  'datasetTransformationId'))
         return return_learning_dataset, return_dataset_transformation
 
     def submit_dataset_transformation_step(self,
@@ -202,7 +202,7 @@ class BaseMetadataCollectionAPI:
         url = f"{self.passport_server_url}/dataset-transformation-step?studyId={self.study_id}"
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         payload = {"createdBy": dataset_transformation_step.createdBy,
-                   "dataTransformationId": dataset_transformation_step.dataTransformationId,
+                   "datasetTransformationId": dataset_transformation_step.datasetTransformationId,
                    "explanation": dataset_transformation_step.explanation,
                    "inputFeatures": dataset_transformation_step.inputFeatures,
                    "lastUpdatedBy": dataset_transformation_step.lastUpdatedBy,
@@ -216,7 +216,7 @@ class BaseMetadataCollectionAPI:
 
         response.raise_for_status()
         response_json = response.json()
-        return DatasetTransformationStep(dataTransformationId=response_json.get('dataTransformationId'),
+        return DatasetTransformationStep(datasetTransformationId=response_json.get('datasetTransformationId'),
                                          inputFeatures=response_json.get('inputFeatures'),
                                          outputFeatures=response_json.get('outputFeatures'),
                                          method=response_json.get('method'),
@@ -291,7 +291,9 @@ class BaseMetadataCollectionAPI:
             "tag": model.tag,
             "modelType": model.modelType,
             "productIdentifier": model.productIdentifier,
-            "owner": model.owner,
+            "ownerOrganizationId": model.ownerOrganizationId,
+            "previousModelId": model.previousModelId,
+            "retrainingReason": model.retrainingReason,
             "trlLevel": model.trlLevel,
             "license": model.license,
             "primaryUse": model.primaryUse,
@@ -332,7 +334,9 @@ class BaseMetadataCollectionAPI:
             studyId=response_json.get('studyId'),
             experimentId=response_json.get('experimentId'),
             name=response_json.get('name'),
-            owner=response_json.get('owner')
+            ownerOrganizationId=response_json.get('ownerOrganizationId'),
+            previousModelId=response_json.get('previousModelId'),
+            retrainingReason=response_json.get('retrainingReason')
         )
 
     def extract_model(self,
@@ -362,6 +366,69 @@ class BaseMetadataCollectionAPI:
         extracted_model: Model = self.extract_model(model, model_info)
         return self.submit_model(extracted_model)
 
+    def submit_model_evaluation(self, model_evaluation: ModelEvaluation) -> ModelEvaluation:
+        """
+        Submit an evaluation run to the AI4HF Passport Server. Measures belong to a run rather than
+        directly to the model, so a run must exist before any measure can be submitted.
+
+        :param model_evaluation: ModelEvaluation object to be sent.
+
+        :return ModelEvaluation: Created ModelEvaluation object from the server.
+        """
+        url = f"{self.passport_server_url}/model-evaluation?studyId={self.study_id}"
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {
+            "modelId": model_evaluation.modelId,
+            "organizationId": model_evaluation.organizationId,
+            "trigger": model_evaluation.trigger,
+            "aggregationMethod": model_evaluation.aggregationMethod,
+            "executedAt": model_evaluation.executedAt,
+            "executedBy": model_evaluation.executedBy,
+            "description": model_evaluation.description
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+
+        # If token is expired, retry
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+
+        response.raise_for_status()
+        response_json: dict = response.json()
+        return ModelEvaluation(
+            modelEvaluationId=response_json.get('modelEvaluationId'),
+            modelId=response_json.get('modelId'),
+            organizationId=response_json.get('organizationId'),
+            trigger=response_json.get('trigger'),
+            aggregationMethod=response_json.get('aggregationMethod'),
+            executedAt=response_json.get('executedAt'),
+            executedBy=response_json.get('executedBy'),
+            description=response_json.get('description'))
+
+    def submit_model_evaluation_dataset(self, model_evaluation_dataset: ModelEvaluationDataset):
+        """
+        Link a LearningDataset the evaluation run was computed over.
+
+        :param model_evaluation_dataset: ModelEvaluationDataset object to be sent.
+
+        :return response: The response of the server for creating the link.
+        """
+        url = f"{self.passport_server_url}/model-evaluation-dataset?studyId={self.study_id}"
+        headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+        payload = {
+            "modelEvaluationId": model_evaluation_dataset.modelEvaluationId,
+            "learningDatasetId": model_evaluation_dataset.learningDatasetId,
+            "weight": model_evaluation_dataset.weight,
+            "description": model_evaluation_dataset.description
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+
+        # If token is expired, retry
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+
+        response.raise_for_status()
+        return response.json()
+
     def submit_evaluation_measure(self, evaluation_measure: EvaluationMeasure):
         """
         Submit evaluation measure to the AI4HF Passport Server.
@@ -374,7 +441,7 @@ class BaseMetadataCollectionAPI:
         url = f"{self.passport_server_url}/evaluation-measure?studyId={self.study_id}"
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         payload = {
-            "modelId": evaluation_measure.modelId,
+            "modelEvaluationId": evaluation_measure.modelEvaluationId,
             "name": evaluation_measure.name,
             "value": evaluation_measure.value,
             "dataType": evaluation_measure.dataType,
@@ -392,6 +459,7 @@ class BaseMetadataCollectionAPI:
     def submit_results_to_ai4hf_passport(self,
                                          model: Any,
                                          learning_stages: list[LearningStage],
+                                         model_evaluation: ModelEvaluation,
                                          evaluation_measures: list[EvaluationMeasure],
                                          model_info: Model,
                                          learning_dataset: LearningDataset,
@@ -405,6 +473,7 @@ class BaseMetadataCollectionAPI:
 
         :param model: Model class that specific to implemented library.
         :param learning_stages: The list of learning stages.
+        :param model_evaluation: The evaluation run the measures were produced in.
         :param evaluation_measures: The list of evaluation measures.
         :param model_info: Model class for model related fields.
         :param model_figures: The list of model figures.
@@ -441,14 +510,20 @@ class BaseMetadataCollectionAPI:
         model_info.learningProcessId = learning_process.learningProcessId
         model_info.studyId = self.study_id
         model_info.experimentId = self.experiment_id
-        model_info.owner = self.organization_id
+        model_info.ownerOrganizationId = self.organization_id
         model_info.createdBy = user_id
         model_info.lastUpdatedBy = user_id
         created_model: Model = self.extract_and_submit_model(model, model_info)
         print(f'Model created: {created_model}')
 
+        model_evaluation.modelId = created_model.modelId
+        if model_evaluation.executedBy is None:
+            model_evaluation.executedBy = user_id
+        created_model_evaluation = self.submit_model_evaluation(model_evaluation)
+        print(f'Model evaluation created: {created_model_evaluation}')
+
         for evaluation_measure in evaluation_measures:
-            evaluation_measure.modelId = created_model.modelId
+            evaluation_measure.modelEvaluationId = created_model_evaluation.modelEvaluationId
             evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
             print(f'Evaluation measure created: {evaluation_measure_response}')
 
@@ -461,8 +536,13 @@ class BaseMetadataCollectionAPI:
         print(f'Learning Dataset created: {response_learning_dataset}')
         print(f'Dataset Transformation created: {response_dataset_transformation}')
 
+        self.submit_model_evaluation_dataset(ModelEvaluationDataset(
+            modelEvaluationId=created_model_evaluation.modelEvaluationId,
+            learningDatasetId=response_learning_dataset.learningDatasetId,
+            description='Learning dataset the evaluation run was computed over.'))
+
         for dataset_transformation_step in dataset_transformation_steps:
-            dataset_transformation_step.dataTransformationId = response_dataset_transformation.dataTransformationId
+            dataset_transformation_step.datasetTransformationId = response_dataset_transformation.datasetTransformationId
             dataset_transformation_step.createdBy = user_id
             dataset_transformation_step.lastUpdatedBy = user_id
             response_dataset_transformation_step = self.submit_dataset_transformation_step(
@@ -641,7 +721,8 @@ class BaseMetadataCollectionAPI:
         """
         url = f"{self.passport_server_url}/model-figure?studyId={self.study_id}"
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
-        payload = {"modelId": model_figure.modelId, "imageBase64": model_figure.imageBase64}
+        payload = {"modelId": model_figure.modelId, "title": model_figure.title,
+                   "description": model_figure.description, "imageBase64": model_figure.imageBase64}
 
         response = requests.post(url, json=payload, headers=headers)
 
@@ -652,4 +733,6 @@ class BaseMetadataCollectionAPI:
         response_json: dict = response.json()
         return ModelFigure(response_json.get('imageBase64'),
                            response_json.get('figureId'),
-                           response_json.get('modelId'))
+                           response_json.get('modelId'),
+                           response_json.get('title'),
+                           response_json.get('description'))
