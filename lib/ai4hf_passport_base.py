@@ -1,6 +1,5 @@
 import requests
 import json
-import jwt
 from typing import Dict, Any
 from ai4hf_passport_models import *
 
@@ -10,21 +9,31 @@ class BaseMetadataCollectionAPI:
     Base class for interacting AI4HF Passport Server.
     """
 
-    def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str, connector_secret: str):
+    def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str,
+                 keycloak_server_url: str, client_id: str, client_secret: str,
+                 keycloak_realm: str = "AI4HF-Authorization"):
         """
         Initialize the API client with authentication and study details.
+
+        The library authenticates as a Keycloak *service account* using the client_credentials grant.
+        The service account must be a member of the study group with the DATA_SCIENTIST role, exactly
+        as a person would be, and the Passport resolves the token's azp claim to a SoftwareAgent so
+        the audit log book records which component wrote what.
         """
         self.passport_server_url = passport_server_url
         self.study_id = study_id
         self.experiment_id = experiment_id
         self.organization_id = organization_id
-        self.connector_secret = connector_secret
+        self.keycloak_server_url = keycloak_server_url.rstrip("/")
+        self.keycloak_realm = keycloak_realm
+        self.client_id = client_id
+        self.client_secret = client_secret
         self.token = self._authenticate()
 
     def __str__(self):
         return json.dumps({"passport_server_url": self.passport_server_url, "study_id": self.study_id,
                            "experiment_id": self.experiment_id, "organization_id": self.organization_id,
-                           "connector_secret": self.connector_secret, "token": self.token})
+                           "client_id": self.client_id, "token": self.token})
 
     def _refreshTokenAndRetry(self, response, headers, payload, url):
         """
@@ -47,11 +56,17 @@ class BaseMetadataCollectionAPI:
 
     def _authenticate(self) -> str:
         """
-        Authenticate with login endpoint and retrieve an access token.
-        """
-        auth_url = f"{self.passport_server_url}/user/connector/login"
+        Obtain an access token for this component's Keycloak service account.
 
-        response = requests.post(auth_url, data=self.connector_secret)
+        :return token: The access token used as a bearer token for every Passport call.
+        """
+        token_url = f"{self.keycloak_server_url}/realms/{self.keycloak_realm}/protocol/openid-connect/token"
+
+        response = requests.post(token_url, data={
+            "grant_type": "client_credentials",
+            "client_id": self.client_id,
+            "client_secret": self.client_secret,
+        })
         response.raise_for_status()
         return response.json().get("access_token")
 
@@ -506,7 +521,10 @@ class BaseMetadataCollectionAPI:
                     augmented_learning_stage_parameters.append(learning_stage_parameter)
             print(f'Learning stage created: {learning_stage_response}')
 
-        user_id = jwt.decode(self.token, options={"verify_signature": False})['sub']
+        # createdBy/lastUpdatedBy reference a Personnel record, and a service account is not a person.
+        # Machine authorship is recorded by the Passport itself, which resolves the token to a
+        # SoftwareAgent and writes it into the audit log book.
+        user_id = None
         model_info.learningProcessId = learning_process.learningProcessId
         model_info.studyId = self.study_id
         model_info.experimentId = self.experiment_id
