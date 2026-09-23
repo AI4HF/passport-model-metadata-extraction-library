@@ -10,7 +10,7 @@ from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, Da
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
 
 from ai4hf_passport_sklearn import SKLearnMetadataCollectionAPI
-from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, LearningStageType, EvaluationMeasureType
+from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, ModelEvaluation, LearningStageType, EvaluationMeasureType
 import pandas as pd
 
 # Example usage of sklearn library
@@ -36,24 +36,9 @@ api_client = SKLearnMetadataCollectionAPI(
     study_id="0197a6f8-2b78-71e4-81c1-b7b6a744ece3",
     experiment_id="0197a6f9-1f49-74a5-ab8a-e64fae0ca141",
     organization_id="0197a6f5-bb48-7855-b248-95697e913f22",
-    connector_secret="eyJhbGciOiJIUzUxMiIsInR5cCIgOiAiSldUIiwi"
-                     "a2lkIiA6ICI5ZTFiZTExNi0yMzg1LTRlZDctYTBi"
-                     "OC01ZDc0NWNjYzllOGMifQ.eyJpYXQiOjE3NTEyN"
-                     "zA4MjgsImp0aSI6ImIxMWE5NGI1LWQ5MzItNDhiN"
-                     "C1iMjc4LWFkZjQ1ZDJjMTMxOCIsImlzcyI6Imh0d"
-                     "HA6Ly9rZXljbG9hazo4MDgwL3JlYWxtcy9BSTRIR"
-                     "i1BdXRob3JpemF0aW9uIiwiYXVkIjoiaHR0cDovL"
-                     "2tleWNsb2FrOjgwODAvcmVhbG1zL0FJNEhGLUF1d"
-                     "Ghvcml6YXRpb24iLCJzdWIiOiJkYXRhX3NjaWVud"
-                     "GlzdCIsInR5cCI6Ik9mZmxpbmUiLCJhenAiOiJBS"
-                     "TRIRi1BdXRoIiwic2Vzc2lvbl9zdGF0ZSI6IjE3Y"
-                     "zU2ZjhkLTljZmEtNDM2OC05MzQ4LTkzN2ZjY2QyM"
-                     "jY0ZCIsInNjb3BlIjoib2ZmbGluZV9hY2Nlc3Mgc"
-                     "HJvZmlsZSBlbWFpbCIsInNpZCI6IjE3YzU2ZjhkL"
-                     "TljZmEtNDM2OC05MzQ4LTkzN2ZjY2QyMjY0ZCJ9."
-                     "obYaa744bmJoQAFO-nh1sCwPKwArWaOUo9_a1I0U"
-                     "zc--HBuTLy6oOJVmnVI62bxnMkqoYo97SYGlKGKw"
-                     "VStz5g"
+    keycloak_server_url="http://localhost:8081",
+    client_id="ai4hf-fl-central",
+    client_secret="fT6yH2nQ9wE4rP7xK1mZ5vB8cJ3dL0sA",
 )
 
 # Provide learning stages
@@ -112,6 +97,13 @@ evaluation_measures = [
                       value = "0.88")
 ]
 
+# Provide the evaluation run the measures were produced in
+model_evaluation = ModelEvaluation(
+    trigger = "training",
+    aggregationMethod = "weighted-average",
+    description = "Training evaluation of the model."
+)
+
 # Provide model details
 model_info = Model(
     name = "test"
@@ -156,6 +148,6 @@ model_figures = [
 ]
 
 # Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, evaluation_measures, model_info, learning_dataset,
+api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, model_evaluation, evaluation_measures, model_info, learning_dataset,
                                             dataset_transformation, dataset_transformation_steps, model_figures,
                                             learning_process_parameters, learning_stage_parameters)
