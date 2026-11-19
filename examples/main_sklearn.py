@@ -1,153 +1,99 @@
-import sys
-import os
-import io
-import matplotlib.pyplot as plt
-import base64
-from lib.ai4hf_passport_models import LearningDataset, DatasetTransformation, DatasetTransformationStep, ModelFigure, \
-    LearningProcessParameter, LearningStageParameter
+"""
+Register a scikit-learn model in the AI4HF Passport, using every option of the library.
 
-# Add 'lib' directory to Python's module search path
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "lib")))
+Step 1 is ordinary training code. Steps 2-3 are what you add after your own training. Only model, model_info,
+model_evaluation, evaluation_measures and learning_dataset are required; everything marked "optional" adds
+more detail to the passport.
+"""
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lib"))  # library is not pip-installable yet
+
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+import pandas as pd
+from sklearn.metrics import accuracy_score, f1_score, roc_auc_score, RocCurveDisplay
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
 from ai4hf_passport_sklearn import SKLearnMetadataCollectionAPI
-from ai4hf_passport_models import LearningStage, EvaluationMeasure, Model, ModelEvaluation, LearningStageType, EvaluationMeasureType
-import pandas as pd
+from ai4hf_passport_models import (Model, ModelEvaluation, EvaluationMeasure, EvaluationMeasureType, LearningDataset,
+                                   LearningStage, LearningStageType, LearningProcessParameter, LearningStageParameter,
+                                   DatasetTransformation, DatasetTransformationStep, ModelFigure)
 
-# Example usage of sklearn library
-dataset = pd.read_csv('../test-data/Social_Network_Ads.csv')
-X = dataset.iloc[:, :-1].values
-y = dataset.iloc[:, -1].values
+# ---------------------------------------------------------------------------------------------------------------
+# 1. Your training code
+# ---------------------------------------------------------------------------------------------------------------
+data = pd.read_csv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "test-data", "Social_Network_Ads.csv"))
+X_train, X_test, y_train, y_test = train_test_split(data[["Age", "EstimatedSalary"]], data["Purchased"],
+                                                    test_size=0.3, random_state=0)
+scaler = StandardScaler().fit(X_train)
+model = DecisionTreeClassifier(criterion="entropy", max_depth=4, random_state=0).fit(scaler.transform(X_train), y_train)
+y_score = model.predict_proba(scaler.transform(X_test))[:, 1]
+y_pred = (y_score >= 0.5).astype(int)
 
-from sklearn.model_selection import train_test_split
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size = 0.30, random_state = 0)
-
-from sklearn.preprocessing import StandardScaler
-sc = StandardScaler()
-X_train = sc.fit_transform(X_train)
-X_test = sc.transform(X_test)
-
-from sklearn.tree import DecisionTreeClassifier
-classifier = DecisionTreeClassifier(criterion = 'entropy', random_state = 0)
-classifier.fit(X_train, y_train)
-
-# Construct an api client for interacting with AI4HF passport server
-api_client = SKLearnMetadataCollectionAPI(
-    passport_server_url="http://localhost:80/ai4hf/passport/api",
-    study_id="0197a6f8-2b78-71e4-81c1-b7b6a744ece3",
-    experiment_id="0197a6f9-1f49-74a5-ab8a-e64fae0ca141",
-    organization_id="0197a6f5-bb48-7855-b248-95697e913f22",
-    keycloak_server_url="http://localhost:8081",
-    client_id="ai4hf-fl-central",
-    client_secret="fT6yH2nQ9wE4rP7xK1mZ5vB8cJ3dL0sA",
+# ---------------------------------------------------------------------------------------------------------------
+# 2. Connect to the Passport
+# ---------------------------------------------------------------------------------------------------------------
+passport = SKLearnMetadataCollectionAPI(
+    passport_server_url=os.getenv("PASSPORT_SERVER_URL", "http://localhost:80/ai4hf/passport/api"),
+    keycloak_server_url=os.getenv("KEYCLOAK_SERVER_URL", "http://localhost:8081"),
+    client_id=os.getenv("CLIENT_ID", "ai4hf-fl-central"),
+    client_secret=os.getenv("CLIENT_SECRET", "fT6yH2nQ9wE4rP7xK1mZ5vB8cJ3dL0sA"),  # demo secret of the local deployment
+    study_id="0197a6f8-2b78-71e4-81c1-b7b6a744ece3",        # the study, experiment and organization
+    experiment_id="0197a6f9-1f49-74a5-ab8a-e64fae0ca141",   # must already exist in the Passport
+    organization_id="0197a6f5-bb48-7855-b248-95697e913f22", # organization that owns the model
 )
 
-# Provide learning stages
-learning_stages = [
-    LearningStage(learningStageType = LearningStageType.TRAINING,
-                  datasetPercentage = 70),
-    LearningStage(learningStageType = LearningStageType.TEST,
-                  datasetPercentage = 20),
-    LearningStage(learningStageType = LearningStageType.VALIDATION,
-                  datasetPercentage = 10)
-]
-
-learning_stage_parameters = [
-    LearningStageParameter(
-        name="k_folds",
-        learningStageId= str(LearningStageType.VALIDATION),
-        parameterId="",
-        type="integer",
-        value="5",
-        description="Number of folds used in k-fold cross validation during validation stage"
-    ),
-    LearningStageParameter(
-        name="shuffle",
-        learningStageId= str(LearningStageType.VALIDATION),
-        parameterId="",
-        type="boolean",
-        value="true",
-        description="Whether the dataset is shuffled before splitting into folds"
-    )
-]
-
-learning_process_parameters = [
-    LearningProcessParameter(
-        name="n_clusters",
-        learningProcessId="",
-        parameterId="",
-        type="integer",
-        value="5",
-        description="Number of clusters (k) used by the K-Means algorithm"
-    ),
-    LearningProcessParameter(
-        name="random_state",
-        learningProcessId="",
-        parameterId="",
-        type="integer",
-        value="42",
-        description="Random seed used for centroid initialization"
-    )
-]
-
-# Provide evaluation measures
-evaluation_measures = [
-    EvaluationMeasure(EvaluationMeasureType.ACCURACY,
-                      value = "0.94"),
-    EvaluationMeasure(EvaluationMeasureType.F1_SCORE,
-                      value = "0.88")
-]
-
-# Provide the evaluation run the measures were produced in
-model_evaluation = ModelEvaluation(
-    trigger = "training",
-    aggregationMethod = "weighted-average",
-    description = "Training evaluation of the model."
-)
-
-# Provide model details
-model_info = Model(
-    name = "test"
-)
-
-learning_dataset = LearningDataset(datasetId="0197a6fa-6507-775b-99d9-f8808e10052d",
-                                   description="Finalized learning dataset for HF Risk Prediction Model Teaching")
-dataset_transformation = DatasetTransformation(title="Dataset Smoothening and Normalization",
-                                               description="Dataset is transformed by smoothening and normalization.")
-dataset_transformation_steps = [
-    DatasetTransformationStep(
-        inputFeatures="feature1",
-        outputFeatures="feature1_1",
-        method="Normalization",
-        explanation="Decimal values are normalized between 0 and 1.")
-]
-
-# Example accuracy values across training epochs
-epochs = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-accuracy = [0.55, 0.60, 0.63, 0.67, 0.70, 0.74, 0.77, 0.79, 0.82, 0.85]
-
-# Create the plot
+# ---------------------------------------------------------------------------------------------------------------
+# 3. Describe the training and submit it
+# ---------------------------------------------------------------------------------------------------------------
 fig, ax = plt.subplots()
-ax.plot(epochs, accuracy, marker='o', linestyle='-', color='b')
+RocCurveDisplay.from_predictions(y_test, y_score, ax=ax)
 
-# Add title, labels, and grid
-ax.set_title("Model Accuracy Over Epochs", fontsize=14, fontweight='bold')
-ax.set_xlabel("Epoch", fontsize=12)
-ax.set_ylabel("Accuracy", fontsize=12)
-ax.grid(True, linestyle='--', alpha=0.6)
+created = passport.submit_results_to_ai4hf_passport(
+    model=model,
 
-# Save the figure to a BytesIO buffer and convert it to Base64
-buf = io.BytesIO()
-fig.savefig(buf, format="png", bbox_inches="tight")
-buf.seek(0)
-image_bytes = buf.read()
-image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+    # The model's descriptive fields (name, version, license, intended use, limitations, ...)
+    model_info=Model(name="Purchase prediction", version="1.0", license="Apache-2.0",
+                     intendedUsers="Developers trying out the AI4HF Passport",
+                     limitations="Toy dataset; not for clinical use."),
 
-# Define a model figure object for this figure
-model_figures = [
-    ModelFigure(imageBase64=image_b64)
-]
+    # The evaluation and its metrics
+    model_evaluation=ModelEvaluation(trigger="training", description="Evaluation on the held-out test split."),
+    evaluation_measures=[
+        EvaluationMeasure(EvaluationMeasureType.ACCURACY, accuracy_score(y_test, y_pred)),
+        EvaluationMeasure(EvaluationMeasureType.F1_SCORE, f1_score(y_test, y_pred)),
+        EvaluationMeasure(EvaluationMeasureType.AUC, roc_auc_score(y_test, y_score)),
+    ],
 
-# Call this function with your model object
-api_client.submit_results_to_ai4hf_passport(classifier, learning_stages, model_evaluation, evaluation_measures, model_info, learning_dataset,
-                                            dataset_transformation, dataset_transformation_steps, model_figures,
-                                            learning_process_parameters, learning_stage_parameters)
+    # The dataset (registered in the Passport) the model was trained on
+    learning_dataset=LearningDataset(datasetId="0197a6fa-6507-775b-99d9-f8808e10052d",
+                                     description="Purchase records used for training", weight=len(data)),
+
+    # Optional: how the dataset was prepared, step by step
+    dataset_transformation=DatasetTransformation(title="Standardization",
+                                                 description="Numeric features are standardized."),
+    dataset_transformation_steps=[
+        DatasetTransformationStep(inputFeatures="Age", outputFeatures="Age", method="StandardScaler",
+                                  explanation="Scaled to mean 0 and unit variance."),
+        DatasetTransformationStep(inputFeatures="EstimatedSalary", outputFeatures="EstimatedSalary",
+                                  method="StandardScaler", explanation="Scaled to mean 0 and unit variance."),
+    ],
+
+    # Optional: the training stages and the share of the data each used
+    learning_stages=[LearningStage(LearningStageType.TRAINING, datasetPercentage=70),
+                     LearningStage(LearningStageType.TEST, datasetPercentage=30)],
+
+    # Optional: settings that should appear in the passport
+    learning_process_parameters=[LearningProcessParameter("feature_scaling", value="StandardScaler")],
+    learning_stage_parameters=[LearningStageParameter("split_random_state", value=0, stage=LearningStageType.TRAINING)],
+
+    # Optional: figures
+    model_figures=[ModelFigure.from_matplotlib(fig, title="ROC curve", description="ROC curve on the test split.")],
+)
+
+print(f"Done. The passport of model {created['modelId']} can now be generated in the Passport UI.")

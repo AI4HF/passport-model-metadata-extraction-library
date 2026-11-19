@@ -1,8 +1,9 @@
+import copy
 import requests
 import json
-from typing import Dict, Any
+import warnings
+from typing import Dict, Any, Optional, Union
 from ai4hf_passport_models import *
-
 
 class BaseMetadataCollectionAPI:
     """
@@ -11,7 +12,8 @@ class BaseMetadataCollectionAPI:
 
     def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str,
                  keycloak_server_url: str, client_id: str, client_secret: str,
-                 keycloak_realm: str = "AI4HF-Authorization"):
+                 keycloak_realm: str = "AI4HF-Authorization",
+                 include_learned_parameters: bool = False):
         """
         Initialize the API client with authentication and study details.
 
@@ -19,8 +21,12 @@ class BaseMetadataCollectionAPI:
         The service account must be a member of the study group with the DATA_SCIENTIST role, exactly
         as a person would be, and the Passport resolves the token's azp claim to a SoftwareAgent so
         the audit log book records which component wrote what.
+
+        :param include_learned_parameters: Also submit learned values (weights, biases, coefficients,
+            feature importances, ...) as model parameters. Off by default: they mean one Passport request
+            pair per array and are not human-readable in a passport. Hyperparameters are always submitted.
         """
-        self.passport_server_url = passport_server_url
+        self.passport_server_url = passport_server_url.rstrip("/")
         self.study_id = study_id
         self.experiment_id = experiment_id
         self.organization_id = organization_id
@@ -28,12 +34,40 @@ class BaseMetadataCollectionAPI:
         self.keycloak_realm = keycloak_realm
         self.client_id = client_id
         self.client_secret = client_secret
+        self.include_learned_parameters = include_learned_parameters
+        self._parameter_cache: Optional[Dict[str, Parameter]] = None
         self.token = self._authenticate()
 
     def __str__(self):
         return json.dumps({"passport_server_url": self.passport_server_url, "study_id": self.study_id,
                            "experiment_id": self.experiment_id, "organization_id": self.organization_id,
-                           "client_id": self.client_id, "token": self.token})
+                           "client_id": self.client_id})
+
+    def _headers(self) -> Dict[str, str]:
+        return {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
+
+    def _get(self, path: str, params: Optional[Dict[str, Any]] = None) -> requests.Response:
+        """
+        GET a Passport endpoint, re-authenticating once on 401.
+        """
+        url = f"{self.passport_server_url}{path}"
+        response = requests.get(url, params=params, headers=self._headers())
+        if response.status_code == 401:
+            self.token = self._authenticate()
+            response = requests.get(url, params=params, headers=self._headers())
+        return response
+
+    def _post(self, path: str, payload: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        POST to a Passport endpoint (studyId is added as query parameter), re-authenticating once on 401.
+        """
+        url = f"{self.passport_server_url}{path}?studyId={self.study_id}"
+        headers = self._headers()
+        response = requests.post(url, json=payload, headers=headers)
+        response = self._refreshTokenAndRetry(response, headers, payload, url)
+        if not response.ok:
+            raise requests.HTTPError(f"{response.status_code} on POST {path}: {response.text}", response=response)
+        return response.json()
 
     def _refreshTokenAndRetry(self, response, headers, payload, url):
         """
@@ -80,7 +114,11 @@ class BaseMetadataCollectionAPI:
         """
         url = f"{self.passport_server_url}/algorithm?studyId={self.study_id}"
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
-        payload = {"name": algorithm.name, "objectiveFunction": algorithm.objectiveFunction,
+        objective_function = algorithm.objectiveFunction
+        if objective_function is not None and not isinstance(objective_function, str):
+            # e.g. a Keras loss given as a function or Loss object
+            objective_function = getattr(objective_function, "__name__", None) or str(objective_function)
+        payload = {"name": algorithm.name, "objectiveFunction": objective_function,
                    "subType": algorithm.subType, "type": algorithm.type}
         response = requests.post(url, json=payload, headers=headers)
 
@@ -218,6 +256,7 @@ class BaseMetadataCollectionAPI:
         headers = {"Authorization": f"Bearer {self.token}", "Content-Type": "application/json"}
         payload = {"createdBy": dataset_transformation_step.createdBy,
                    "datasetTransformationId": dataset_transformation_step.datasetTransformationId,
+                   "stepOrder": dataset_transformation_step.stepOrder,
                    "explanation": dataset_transformation_step.explanation,
                    "inputFeatures": dataset_transformation_step.inputFeatures,
                    "lastUpdatedBy": dataset_transformation_step.lastUpdatedBy,
@@ -232,6 +271,7 @@ class BaseMetadataCollectionAPI:
         response.raise_for_status()
         response_json = response.json()
         return DatasetTransformationStep(datasetTransformationId=response_json.get('datasetTransformationId'),
+                                         stepOrder=response_json.get('stepOrder'),
                                          inputFeatures=response_json.get('inputFeatures'),
                                          outputFeatures=response_json.get('outputFeatures'),
                                          method=response_json.get('method'),
@@ -471,109 +511,237 @@ class BaseMetadataCollectionAPI:
         response.raise_for_status()
         return response.json()
 
+    def submit_learning_process_dataset(self, learning_process_id: str, learning_dataset_id: str,
+                                        description: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Link a LearningDataset to the LearningProcess that trained on it. Together with ModelEvaluationDataset
+        this is what the model-scoped passport uses to find the datasets behind a model.
+
+        :return response: The response of the server for creating the link.
+        """
+        return self._post("/learning-process-dataset", {"learningProcessId": learning_process_id,
+                                                        "learningDatasetId": learning_dataset_id,
+                                                        "description": description})
+
+    def resolve_executed_by(self) -> str:
+        """
+        The value recorded as executedBy of the evaluation runs this client creates: the id of the
+        SoftwareAgent registered for this Keycloak client, as in the Passport's seed data. Falls back to the
+        client id when the registry cannot be read (it needs a realm role, which a service account that is
+        only a study-group member does not have).
+        """
+        try:
+            response = self._get("/software-agent")
+            if response.ok:
+                for agent in response.json():
+                    if agent.get("keycloakClientId") == self.client_id:
+                        return agent.get("softwareAgentId")
+        except requests.RequestException:
+            pass
+        return self.client_id
+
+    def get_or_create_parameter(self, name: str, data_type: str, description: Optional[str]) -> Parameter:
+        """
+        Parameters are study-level definitions (a name and a data type) shared by learning processes,
+        stages and models. Reuse the study's parameter of the same name instead of adding a duplicate
+        definition on every run; create it when it does not exist yet.
+        """
+        if self._parameter_cache is None:
+            self._parameter_cache = {}
+            response = self._get("/parameter", {"studyId": self.study_id})
+            if response.ok:
+                for p in response.json():
+                    self._parameter_cache.setdefault(p.get("name"), Parameter(
+                        p.get("parameterId"), p.get("studyId"), p.get("name"), p.get("dataType"),
+                        p.get("description")))
+        existing = self._parameter_cache.get(name)
+        if existing is not None:
+            return existing
+        created = self.submit_parameter(Parameter("", self.study_id, name, data_type, description))
+        self._parameter_cache[name] = created
+        return created
+
+    def submit_evaluation_run(self, model_id: str, model_evaluation: ModelEvaluation,
+                              evaluation_measures: list[EvaluationMeasure],
+                              learning_datasets: Optional[list[LearningDataset]] = None) -> ModelEvaluation:
+        """
+        Record one evaluation run of a model: the run, its measures, and the learning datasets it was computed
+        over (with their weight). submit_results_to_ai4hf_passport records the model's main run with this; call
+        it directly for further runs, e.g. one per federated site with organizationId set to that site.
+
+        :param model_id: The model the run evaluated (the "modelId" returned by submit_results_to_ai4hf_passport).
+        :param model_evaluation: The run. executedBy defaults to this client's SoftwareAgent.
+        :param evaluation_measures: The metrics of the run.
+        :param learning_datasets: Learning datasets (with learningDatasetId) the run was computed over.
+
+        :return ModelEvaluation: The created run.
+        """
+        model_evaluation = copy.deepcopy(model_evaluation)
+        model_evaluation.modelId = model_id
+        if model_evaluation.executedBy is None:
+            model_evaluation.executedBy = self.resolve_executed_by()
+        created_model_evaluation = self.submit_model_evaluation(model_evaluation)
+        print(f'Model evaluation created: {created_model_evaluation}')
+        for evaluation_measure in copy.deepcopy(evaluation_measures or []):
+            evaluation_measure.modelEvaluationId = created_model_evaluation.modelEvaluationId
+            evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
+            print(f'Evaluation measure created: {evaluation_measure_response}')
+        for dataset in learning_datasets or []:
+            self.submit_model_evaluation_dataset(ModelEvaluationDataset(
+                modelEvaluationId=created_model_evaluation.modelEvaluationId,
+                learningDatasetId=dataset.learningDatasetId,
+                weight=dataset.weight,
+                description=dataset.description))
+            print(f'Model Evaluation Dataset linked: {dataset.learningDatasetId}')
+        return created_model_evaluation
+
     def submit_results_to_ai4hf_passport(self,
                                          model: Any,
-                                         learning_stages: list[LearningStage],
-                                         model_evaluation: ModelEvaluation,
-                                         evaluation_measures: list[EvaluationMeasure],
-                                         model_info: Model,
-                                         learning_dataset: LearningDataset,
-                                         dataset_transformation: DatasetTransformation,
-                                         dataset_transformation_steps: list[DatasetTransformationStep],
-                                         model_figures: list[ModelFigure],
-                                         learning_process_parameters: list[LearningProcessParameter],
-                                         learning_stage_parameters: list[LearningStageParameter]):
+                                         learning_stages: Optional[list[LearningStage]] = None,
+                                         model_evaluation: Optional[ModelEvaluation] = None,
+                                         evaluation_measures: Optional[list[EvaluationMeasure]] = None,
+                                         model_info: Optional[Model] = None,
+                                         learning_dataset: Union[LearningDataset, list[LearningDataset], None] = None,
+                                         dataset_transformation: Optional[DatasetTransformation] = None,
+                                         dataset_transformation_steps: Optional[list[DatasetTransformationStep]] = None,
+                                         model_figures: Optional[list[ModelFigure]] = None,
+                                         learning_process_parameters: Optional[list[LearningProcessParameter]] = None,
+                                         learning_stage_parameters: Optional[list[LearningStageParameter]] = None
+                                         ) -> Dict[str, Any]:
         """
-        Submit results of the ML model to the AI4HF Passport Server.
+        Submit results of the ML model to the AI4HF Passport Server: everything a model-scoped passport is
+        generated from. Pass the arguments by keyword; only model, model_info, model_evaluation,
+        evaluation_measures and learning_dataset are required. The given objects are not modified, so the same
+        lists can be reused across calls.
 
-        :param model: Model class that specific to implemented library.
-        :param learning_stages: The list of learning stages.
-        :param model_evaluation: The evaluation run the measures were produced in.
-        :param evaluation_measures: The list of evaluation measures.
-        :param model_info: Model class for model related fields.
-        :param model_figures: The list of model figures.
-        :param learning_process_parameters: The list of learning process parameters.
-        :param learning_stage_parameters: The list of learning stage parameters.
+        :param model: The trained model object (scikit-learn estimator, Keras model or torch.nn.Module).
+        :param model_info: Descriptive fields of the model (name, version, license, intended use, ...).
+        :param model_evaluation: The evaluation run the measures were produced in. For a federated
+            aggregate leave organizationId empty; executedBy defaults to this client's SoftwareAgent.
+        :param evaluation_measures: The metrics of that run.
+        :param learning_dataset: The learning dataset the model was trained and evaluated on, or a list with one
+            per participating site for a federated model. Each is linked to the learning process (trained on)
+            and to the evaluation run (evaluated on, with its weight).
+        :param learning_stages: Optional training/validation/test stages with their dataset percentages.
+        :param dataset_transformation: Optional title/description of the transformation applied to the datasets.
+            One transformation is created per new learning dataset (the Passport creates both together).
+        :param dataset_transformation_steps: Optional ordered transformation steps; stepOrder follows the list.
+        :param model_figures: Optional figures (see ModelFigure.from_matplotlib).
+        :param learning_process_parameters: Optional parameters of the learning process; these appear in the
+            passport.
+        :param learning_stage_parameters: Optional parameters of individual stages (stage=LearningStageType.X);
+            these appear in the passport.
 
+        :return dict: Ids of the created records (learningProcessId, modelId, modelEvaluationId,
+            learningDatasetIds) and the created LearningDataset objects (learningDatasets, in the given order).
         """
+        missing = [name for name, value in (("model_info", model_info), ("model_evaluation", model_evaluation),
+                                            ("evaluation_measures", evaluation_measures),
+                                            ("learning_dataset", learning_dataset)) if value is None]
+        if missing:
+            raise ValueError(f"submit_results_to_ai4hf_passport needs: {', '.join(missing)}")
+        if dataset_transformation is None:
+            dataset_transformation = DatasetTransformation(title="Learning dataset preparation",
+                                                           description="Preparation of the dataset for training.")
+
+        learning_stages = copy.deepcopy(learning_stages or [])
+        model_evaluation = copy.deepcopy(model_evaluation)
+        evaluation_measures = copy.deepcopy(evaluation_measures)
+        model_info = copy.deepcopy(model_info)
+        learning_datasets = copy.deepcopy(learning_dataset if isinstance(learning_dataset, list) else [learning_dataset])
+        dataset_transformation_steps = copy.deepcopy(dataset_transformation_steps or [])
+        model_figures = copy.deepcopy(model_figures or [])
+        learning_process_parameters = copy.deepcopy(learning_process_parameters or [])
+        learning_stage_parameters = copy.deepcopy(learning_stage_parameters or [])
+
         print('Sending given informations into AI4HF Passport server....')
+
+        # 1. Algorithm -> Implementation -> LearningProcess
         learning_process = self.extract_and_submit_learning_process(model)
         print(f'Learning process created: {learning_process}')
-
-        augmented_learning_process_parameters = []
         for learning_process_parameter in learning_process_parameters:
             learning_process_parameter.learningProcessId = learning_process.learningProcessId
-            augmented_learning_process_parameters.append(learning_process_parameter)
 
-        augmented_learning_stage_parameters = []
+        # 2. Learning stages, and the stage parameters matched to them by stage type
+        stage_ids: Dict[str, str] = {}
         for learning_stage in learning_stages:
             learning_stage.learningProcessId = learning_process.learningProcessId
             learning_stage_response = self.submit_learning_stage(learning_stage)
-            for learning_stage_parameter in learning_stage_parameters:
-                if learning_stage.learningStageName == "Model Testing" and learning_stage_parameter.learningStageId == str(LearningStageType.TEST):
-                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
-                    augmented_learning_stage_parameters.append(learning_stage_parameter)
-                elif learning_stage.learningStageName == "Model Training" and learning_stage_parameter.learningStageId == str(LearningStageType.TRAINING):
-                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
-                    augmented_learning_stage_parameters.append(learning_stage_parameter)
-                elif learning_stage.learningStageName == "Model Validation" and learning_stage_parameter.learningStageId == str(LearningStageType.VALIDATION):
-                    learning_stage_parameter.learningStageId = learning_stage_response.get("learningStageId")
-                    augmented_learning_stage_parameters.append(learning_stage_parameter)
+            stage_type = learning_stage.learningStageType
+            for key in (str(stage_type), stage_type.value, stage_type.name):
+                stage_ids[key] = learning_stage_response.get("learningStageId")
             print(f'Learning stage created: {learning_stage_response}')
+        matched_learning_stage_parameters = []
+        for learning_stage_parameter in learning_stage_parameters:
+            key = learning_stage_parameter.learningStageId
+            key = str(key) if isinstance(key, LearningStageType) else key
+            if key in stage_ids:
+                learning_stage_parameter.learningStageId = stage_ids[key]
+                matched_learning_stage_parameters.append(learning_stage_parameter)
+            else:
+                warnings.warn(f"Learning stage parameter '{learning_stage_parameter.name}' refers to stage "
+                              f"'{key}', which is not among the submitted learning stages; it is skipped.")
 
-        # createdBy/lastUpdatedBy reference a Personnel record, and a service account is not a person.
-        # Machine authorship is recorded by the Passport itself, which resolves the token to a
+        # 3. Model. createdBy/lastUpdatedBy reference a Personnel record, and a service account is not a
+        # person: machine authorship is recorded by the Passport itself, which resolves the token to a
         # SoftwareAgent and writes it into the audit log book.
-        user_id = None
         model_info.learningProcessId = learning_process.learningProcessId
         model_info.studyId = self.study_id
         model_info.experimentId = self.experiment_id
         model_info.ownerOrganizationId = self.organization_id
-        model_info.createdBy = user_id
-        model_info.lastUpdatedBy = user_id
+        model_info.createdBy = None
+        model_info.lastUpdatedBy = None
         created_model: Model = self.extract_and_submit_model(model, model_info)
         print(f'Model created: {created_model}')
 
-        model_evaluation.modelId = created_model.modelId
-        if model_evaluation.executedBy is None:
-            model_evaluation.executedBy = user_id
-        created_model_evaluation = self.submit_model_evaluation(model_evaluation)
-        print(f'Model evaluation created: {created_model_evaluation}')
+        # 4. Learning datasets (+ transformation and its ordered steps), linked to the learning process
+        for position, step in enumerate(dataset_transformation_steps, start=1):
+            if step.stepOrder is None:
+                step.stepOrder = position
+        created_learning_datasets: list[LearningDataset] = []
+        for dataset in learning_datasets:
+            if dataset.learningDatasetId:
+                print(f'Learning Dataset reused: {dataset}')
+                created_learning_datasets.append(dataset)
+            else:
+                response_learning_dataset, response_dataset_transformation = self.submit_learning_dataset_and_transformation(
+                    learning_dataset=dataset, dataset_transformation=dataset_transformation)
+                response_learning_dataset.weight = dataset.weight
+                print(f'Learning Dataset created: {response_learning_dataset}')
+                print(f'Dataset Transformation created: {response_dataset_transformation}')
+                for step in dataset_transformation_steps:
+                    step_to_submit = copy.copy(step)
+                    step_to_submit.datasetTransformationId = response_dataset_transformation.datasetTransformationId
+                    step_to_submit.createdBy = None
+                    step_to_submit.lastUpdatedBy = None
+                    response_step = self.submit_dataset_transformation_step(step_to_submit)
+                    print(f'Dataset Transformation Step created: {response_step}')
+                created_learning_datasets.append(response_learning_dataset)
+            self.submit_learning_process_dataset(learning_process.learningProcessId,
+                                                 created_learning_datasets[-1].learningDatasetId,
+                                                 created_learning_datasets[-1].description)
+            print(f'Learning Process Dataset linked: {created_learning_datasets[-1].learningDatasetId}')
 
-        for evaluation_measure in evaluation_measures:
-            evaluation_measure.modelEvaluationId = created_model_evaluation.modelEvaluationId
-            evaluation_measure_response = self.submit_evaluation_measure(evaluation_measure)
-            print(f'Evaluation measure created: {evaluation_measure_response}')
+        # 5. The evaluation run, its measures, and the datasets it was computed over
+        created_model_evaluation = self.submit_evaluation_run(created_model.modelId, model_evaluation,
+                                                              evaluation_measures, created_learning_datasets)
 
-        self.extract_and_submit_parameters(model, created_model.modelId, augmented_learning_process_parameters, augmented_learning_stage_parameters)
+        # 6. Parameters
+        self.extract_and_submit_parameters(model, created_model.modelId, learning_process_parameters,
+                                           matched_learning_stage_parameters)
 
-        learning_dataset.studyId = self.study_id
-        response_learning_dataset, response_dataset_transformation = self.submit_learning_dataset_and_transformation(
-            learning_dataset=learning_dataset,
-            dataset_transformation=dataset_transformation)
-        print(f'Learning Dataset created: {response_learning_dataset}')
-        print(f'Dataset Transformation created: {response_dataset_transformation}')
-
-        self.submit_model_evaluation_dataset(ModelEvaluationDataset(
-            modelEvaluationId=created_model_evaluation.modelEvaluationId,
-            learningDatasetId=response_learning_dataset.learningDatasetId,
-            description='Learning dataset the evaluation run was computed over.'))
-
-        for dataset_transformation_step in dataset_transformation_steps:
-            dataset_transformation_step.datasetTransformationId = response_dataset_transformation.datasetTransformationId
-            dataset_transformation_step.createdBy = user_id
-            dataset_transformation_step.lastUpdatedBy = user_id
-            response_dataset_transformation_step = self.submit_dataset_transformation_step(
-                dataset_transformation_step=dataset_transformation_step)
-            print(f'Dataset Transformation Step created: {response_dataset_transformation_step}')
-
+        # 7. Figures
         for model_figure in model_figures:
             model_figure.modelId = created_model.modelId
             model_figure_response = self.submit_model_figure(model_figure)
             print(f'Model Figure created: {model_figure_response}')
 
         print('Given informations are sent into AI4HF Passport server!')
-        pass
+        return {"learningProcessId": learning_process.learningProcessId,
+                "modelId": created_model.modelId,
+                "modelEvaluationId": created_model_evaluation.modelEvaluationId,
+                "learningDatasetIds": [d.learningDatasetId for d in created_learning_datasets],
+                "learningDatasets": created_learning_datasets}
 
     def submit_parameter(self, parameter: Parameter) -> Parameter:
         """
@@ -682,52 +850,41 @@ class BaseMetadataCollectionAPI:
                                       learning_process_parameters: list[LearningProcessParameter],
                                       learning_stage_parameters: list[LearningStageParameter]):
         """
-        Extract and submit parameters into the server.
+        Extract and submit parameters into the server. Every parameter is linked to a study-level Parameter
+        definition of the same name (reused when it exists). The link's type holds the Passport data type
+        (int, decimal, boolean, string), as in the Passport's own data.
 
         :param model: Model class that specific to implemented library.
         :param model_id: The ID of the model.
-        :param learning_process_parameters: List of Learning Process Parameter objects.
-        :param learning_stage_parameters: List of Learning Stage Parameter objects.
-
-        :return response: Response json from the server.
+        :param learning_process_parameters: List of Learning Process Parameter objects (learningProcessId set).
+        :param learning_stage_parameters: List of Learning Stage Parameter objects (learningStageId set).
         """
-        extracted_parameters = self.extract_parameters(model)
+        extracted_parameters = self.extract_parameters(model) or []
+        if not self.include_learned_parameters:
+            # "parameter" marks learned values (weights, coefficients, ...) in the framework extractors
+            extracted_parameters = [p for p in extracted_parameters if p.get('type') != 'parameter']
         for extracted_parameter_dict in extracted_parameters:
-            extracted_parameter = Parameter(extracted_parameter_dict.get('parameterId'),
-                                            extracted_parameter_dict.get('studyId'),
-                                            extracted_parameter_dict.get('name'),
-                                            extracted_parameter_dict.get('dataType'),
-                                            extracted_parameter_dict.get('description'))
-            created_parameter = self.submit_parameter(extracted_parameter)
-            model_parameter = ModelParameter(model_id, created_parameter.parameterId,
-                                             extracted_parameter_dict.get('type', None),
+            data_type = normalize_data_type(extracted_parameter_dict.get('dataType'))
+            parameter = self.get_or_create_parameter(extracted_parameter_dict.get('name'), data_type,
+                                                     extracted_parameter_dict.get('description'))
+            model_parameter = ModelParameter(model_id, parameter.parameterId, data_type,
                                              extracted_parameter_dict.get('value', None))
             created_model_parameter = self.submit_model_parameter(model_parameter)
-            print(f'Model Parameter created: {created_model_parameter}')
+            print(f'Model Parameter created: {extracted_parameter_dict.get("name")} = {created_model_parameter.value}')
 
         for learning_process_parameter in learning_process_parameters:
-            linked_parameter = Parameter(parameterId="",
-                                         studyId=self.study_id,
-                                         name=learning_process_parameter.name,
-                                         dataType=learning_process_parameter.type,
-                                         description=learning_process_parameter.description)
-            created_parameter = self.submit_parameter(linked_parameter)
-            learning_process_parameter.parameterId = created_parameter.parameterId
+            parameter = self.get_or_create_parameter(learning_process_parameter.name, learning_process_parameter.type,
+                                                     learning_process_parameter.description)
+            learning_process_parameter.parameterId = parameter.parameterId
             created_learning_process_parameter = self.submit_learning_process_parameter(learning_process_parameter)
             print(f'Learning Process Parameter created: {created_learning_process_parameter}')
 
         for learning_stage_parameter in learning_stage_parameters:
-            linked_parameter = Parameter(parameterId="",
-                                         studyId=self.study_id,
-                                         name=learning_stage_parameter.name,
-                                         dataType=learning_stage_parameter.type,
-                                         description=learning_stage_parameter.description)
-            created_parameter = self.submit_parameter(linked_parameter)
-            learning_stage_parameter.parameterId = created_parameter.parameterId
+            parameter = self.get_or_create_parameter(learning_stage_parameter.name, learning_stage_parameter.type,
+                                                     learning_stage_parameter.description)
+            learning_stage_parameter.parameterId = parameter.parameterId
             created_learning_stage_parameter = self.submit_learning_stage_parameter(learning_stage_parameter)
             print(f'Learning Stage Parameter created: {created_learning_stage_parameter}')
-
-        pass
 
     def submit_model_figure(self, model_figure: ModelFigure) -> ModelFigure:
         """

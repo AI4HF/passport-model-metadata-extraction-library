@@ -7,14 +7,6 @@ class KerasMetadataCollectionAPI(BaseMetadataCollectionAPI):
     """
     Keras library implementation for interacting AI4HF Passport Server.
     """
-    def __init__(self, passport_server_url: str, study_id: str, experiment_id: str, organization_id: str,
-                 keycloak_server_url: str, client_id: str, client_secret: str,
-                 keycloak_realm: str = "AI4HF-Authorization"):
-        """
-        Initialize the API client with authentication and study details.
-        """
-        super().__init__(passport_server_url, study_id, experiment_id, organization_id,
-                         keycloak_server_url, client_id, client_secret, keycloak_realm)
 
         
     def extract_learning_process(self, model: Model) -> Dict[str, Any]:
@@ -116,7 +108,9 @@ class KerasMetadataCollectionAPI(BaseMetadataCollectionAPI):
             tag =  model_info.tag,
             modelType = model_type,
             productIdentifier = model_info.productIdentifier,
-            owner = model_info.owner,
+            ownerOrganizationId = model_info.ownerOrganizationId,
+            previousModelId = model_info.previousModelId,
+            retrainingReason = model_info.retrainingReason,
             trlLevel = model_info.trlLevel,
             license = model_info.license,
             primaryUse = model_info.primaryUse,
